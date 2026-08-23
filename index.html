@@ -9,48 +9,43 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <style>
 :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color-scheme:dark;background:#070809;color:#f3f5f7}
-*{box-sizing:border-box}
-html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#070809}
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#070809}
+button,select{font:inherit}
 #app-frame{position:fixed;inset:0;width:100%;height:100%;border:0;background:#070809;opacity:0;transition:opacity .16s ease}
 #app-frame.ready{opacity:1}
-.boot{position:fixed;inset:0;display:grid;place-items:center;background:#070809;color:#aeb5c0;z-index:2;font-size:.9rem}
-.boot.hidden{display:none}
-.onboarding-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:rgba(3,4,5,.72);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
-.onboarding-backdrop.hidden{display:none}
-.onboarding{width:min(690px,100%);max-height:min(880px,calc(100dvh - 40px));overflow:auto;border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:25px;background:linear-gradient(145deg,#17191d,#0e1013);box-shadow:0 30px 90px rgba(0,0,0,.58);color:#f3f5f7}
-.brand{display:flex;align-items:center;gap:13px;padding-bottom:17px;border-bottom:1px solid rgba(255,255,255,.1)}
-.mark{width:52px;height:52px;border-radius:17px;display:grid;place-items:center;background:linear-gradient(145deg,#d8dce2,#737b86 54%,#24272c 55%,#08090b);font-weight:850;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.3)}
-.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:#9da4ae;font-weight:800}
-.brand strong{display:block;margin-top:2px}
-h1{margin:22px 0 7px;font-size:clamp(1.65rem,4vw,2.15rem);line-height:1.08;letter-spacing:-.04em}
-p{margin:0;color:#adb5c0;line-height:1.55}
-.section{display:grid;gap:10px;margin-top:22px}
-.section-title{font-weight:780}
-.segment{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:5px;border:1px solid rgba(255,255,255,.12);border-radius:15px;background:#1b1e22}
-.choice,.accent{border:1px solid transparent;background:transparent;color:#adb5c0;border-radius:11px;min-height:44px;padding:9px 12px;font:inherit;font-weight:720;cursor:pointer}
-.choice:hover,.accent:hover{background:#252930;color:#fff}
-.choice.active{background:#f3f5f7;color:#101216;border-color:#fff}
-.accents{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
-.accent{min-height:67px;border-color:rgba(255,255,255,.12);background:#17191d;color:#d5d9df;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;font-size:.78rem}
-.accent.active{border-color:#f3f5f7;box-shadow:0 0 0 2px rgba(255,255,255,.14);color:#fff}
-.swatch{width:25px;height:25px;border-radius:50%;background:var(--swatch);box-shadow:0 0 0 2px #17191d,0 0 0 3px rgba(255,255,255,.25)}
-.version{margin-top:22px;padding:15px;border:1px solid rgba(255,255,255,.11);border-radius:16px;background:#1b1e22;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;align-items:center}
-.version small{color:#9da4ae}.version strong{font-size:.98rem}.badge{padding:5px 9px;border-radius:999px;background:#2b2f35;color:#d9dde3;font-size:.74rem;font-weight:760}.version p{grid-column:1/-1;font-size:.82rem}
-.actions{display:flex;justify-content:flex-end;margin-top:22px}
-.start{border:1px solid #f3f5f7;border-radius:13px;background:#f3f5f7;color:#101216;min-height:46px;padding:10px 18px;font:inherit;font-weight:800;cursor:pointer}
-.start:hover{background:#fff}
-@media(max-width:560px){.onboarding{padding:20px;border-radius:20px}.accents{grid-template-columns:repeat(2,minmax(0,1fr))}.accent{min-height:54px;flex-direction:row;justify-content:flex-start}.version{grid-template-columns:1fr}.version p{grid-column:auto}.actions .start{width:100%}}
+.boot{position:fixed;inset:0;display:grid;place-items:center;background:#070809;color:#aeb5c0;z-index:2;font-size:.9rem;padding:24px;text-align:center}.boot.hidden{display:none}
+.notice{position:fixed;z-index:1500;top:16px;left:50%;transform:translateX(-50%);width:min(620px,calc(100% - 28px));padding:11px 14px;border:1px solid rgba(255,255,255,.15);border-radius:12px;background:#20242a;color:#f4f6f8;box-shadow:0 12px 36px rgba(0,0,0,.35);font-size:.86rem;line-height:1.4}.notice.hidden{display:none}.notice.error{border-color:#8f424a;background:#32191d}
+.onboarding-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:rgba(3,4,5,.72);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}.onboarding-backdrop.hidden{display:none}
+.onboarding{width:min(760px,100%);max-height:min(900px,calc(100dvh - 40px));overflow:auto;border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:25px;background:linear-gradient(145deg,#17191d,#0e1013);box-shadow:0 30px 90px rgba(0,0,0,.58);color:#f3f5f7}
+.brand{display:flex;align-items:center;gap:13px;padding-bottom:17px;border-bottom:1px solid rgba(255,255,255,.1)}.mark{width:52px;height:52px;border-radius:17px;display:grid;place-items:center;background:linear-gradient(145deg,#d8dce2,#737b86 54%,#24272c 55%,#08090b);font-weight:850;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.3)}.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:#9da4ae;font-weight:800}.brand strong{display:block;margin-top:2px}
+h1{margin:22px 0 7px;font-size:clamp(1.65rem,4vw,2.15rem);line-height:1.08;letter-spacing:-.04em}p{margin:0;color:#adb5c0;line-height:1.55}.section{display:grid;gap:10px;margin-top:22px}.section-title{font-weight:780}.section-help{font-size:.82rem;color:#9199a4}
+.segment{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:5px;border:1px solid rgba(255,255,255,.12);border-radius:15px;background:#1b1e22}.choice,.accent,.version-choice{border:1px solid transparent;background:transparent;color:#adb5c0;border-radius:11px;min-height:44px;padding:9px 12px;font:inherit;font-weight:720;cursor:pointer}.choice:hover,.accent:hover,.version-choice:hover:not(:disabled){background:#252930;color:#fff}.choice.active{background:#f3f5f7;color:#101216;border-color:#fff}
+.accents{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.accent{min-height:67px;border-color:rgba(255,255,255,.12);background:#17191d;color:#d5d9df;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;font-size:.78rem}.accent.active{border-color:#f3f5f7;box-shadow:0 0 0 2px rgba(255,255,255,.14);color:#fff}.swatch{width:25px;height:25px;border-radius:50%;background:var(--swatch);box-shadow:0 0 0 2px #17191d,0 0 0 3px rgba(255,255,255,.25)}
+.versions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.version-choice{min-height:88px;text-align:left;border-color:rgba(255,255,255,.12);background:#17191d;padding:13px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;align-content:center}.version-choice strong{color:#eef1f5;font-size:.94rem}.version-choice small{grid-column:1/-1;color:#929aa5;font-weight:560}.version-choice .lang{font-size:.69rem;padding:4px 7px;border-radius:999px;background:#262a30;color:#c7ccd3}.version-choice.active{border-color:#f3f5f7;box-shadow:0 0 0 2px rgba(255,255,255,.13)}.version-choice:disabled{cursor:not-allowed;opacity:.56}.version-choice:disabled strong{color:#c3c8cf}.pending{color:#d9b974!important}
+.legal-note{margin-top:12px;font-size:.76rem;color:#7f8791;line-height:1.45}.actions{display:flex;justify-content:flex-end;margin-top:22px}.start{border:1px solid #f3f5f7;border-radius:13px;background:#f3f5f7;color:#101216;min-height:46px;padding:10px 18px;font:inherit;font-weight:800;cursor:pointer}.start:hover{background:#fff}.start:disabled{opacity:.55;cursor:wait}
+@media(max-width:560px){.onboarding{padding:20px;border-radius:20px}.accents{grid-template-columns:repeat(2,minmax(0,1fr))}.accent{min-height:54px;flex-direction:row;justify-content:flex-start}.versions{grid-template-columns:1fr}.actions .start{width:100%}}
 @media(prefers-reduced-motion:reduce){#app-frame{transition:none}}
 </style>
 </head>
 <body>
 <div class="boot" id="boot">Loading TMS 60…</div>
-<iframe id="app-frame" src="app.html" title="TMS 60 Memory Lab"></iframe>
+<div class="notice hidden" id="notice" role="status"></div>
+<iframe id="app-frame" title="TMS 60 Memory Lab"></iframe>
 <div class="onboarding-backdrop hidden" id="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
   <div class="onboarding">
     <div class="brand"><div class="mark">60</div><div><div class="eyebrow">First setup</div><strong>TMS Memory Lab</strong></div></div>
-    <h1 id="onboarding-title">Choose your look</h1>
-    <p>Black / White is the default. Pick any appearance you prefer. You can change it later in Settings.</p>
+    <h1 id="onboarding-title">Set up TMS 60</h1>
+    <p>Choose the Bible wording and appearance you want to memorize. Both can be changed later in Settings.</p>
+    <div class="section">
+      <div class="section-title">Bible version</div>
+      <div class="section-help">Memorization progress is kept separately for every translation because exact wording differs.</div>
+      <div class="versions" id="version-options">
+        <button class="version-choice" type="button" data-version-choice="esv"><strong>English Standard Version</strong><span class="lang">English</span><small>ESV · bundled</small></button>
+        <button class="version-choice" type="button" data-version-choice="niv" disabled><strong>New International Version</strong><span class="lang">English</span><small class="pending">NIV · text permission/source pending</small></button>
+        <button class="version-choice" type="button" data-version-choice="schlachter1951"><strong>Schlachter 1951</strong><span class="lang">Deutsch</span><small>SCH1951 · first load requires internet</small></button>
+        <button class="version-choice" type="button" data-version-choice="krv1961"><strong>개역한글 (1961)</strong><span class="lang">한국어</span><small>개역한글 · first load requires internet</small></button>
+      </div>
+    </div>
     <div class="section">
       <div class="section-title">Light / dark</div>
       <div class="segment" id="mode-options">
@@ -71,109 +66,138 @@ p{margin:0;color:#adb5c0;line-height:1.55}
         <button class="accent" type="button" data-accent-choice="magenta" style="--swatch:#d0529a"><span class="swatch"></span><span>Magenta</span></button>
       </div>
     </div>
-    <div class="version">
-      <div><small>Bible version</small><br><strong>English Standard Version (ESV)</strong></div>
-      <span class="badge">Current</span>
-      <p>Version selection will become the next onboarding step after the additional 60-verse translation datasets are verified and added.</p>
-    </div>
+    <div class="legal-note">Schlachter 1951 © 1951 Genfer Bibelgesellschaft; CC BY 4.0 attribution/source information: eBible.org. 개역한글 1952/1961 is supplied from the public-domain GetBible/Wikisource source. NIV remains disabled until an authorized Biblica text source is connected.</div>
     <div class="actions"><button class="start" id="finish-onboarding" type="button">Start memorizing</button></div>
   </div>
 </div>
+<script src="translations.js"></script>
 <script>
 'use strict';
-const APP_KEY='tms60-esv-memory-lab-v1';
-const ONBOARDING_KEY='tms60-onboarding-theme-v1';
+const ESV_KEY='tms60-esv-memory-lab-v1';
+const VERSION_KEY='tms60-active-translation-v1';
+const THEME_KEY='tms60-global-theme-v1';
+const ONBOARDING_KEY='tms60-onboarding-v2';
 const APPEARANCES=['light','dark'];
 const ACCENTS=['neutral','blue','green','red','purple','brown','orange','magenta'];
 const frame=document.getElementById('app-frame');
 const boot=document.getElementById('boot');
+const notice=document.getElementById('notice');
 const onboarding=document.getElementById('onboarding');
 const finish=document.getElementById('finish-onboarding');
-let freshInstall=false;
 let selected={appearance:'dark',accent:'neutral'};
+let selectedVersion='esv';
+let activeVersion='esv';
+let baseSourcePromise=null;
+let noticeTimer=0;
+let loadSerial=0;
 
+function safeGet(key){try{return localStorage.getItem(key)}catch(_){return null}}
+function safeSet(key,value){try{localStorage.setItem(key,value)}catch(_){}}
+function safeRemove(key){try{localStorage.removeItem(key)}catch(_){}}
+function getVersion(id){return window.TMSVersions?.get(id)||{id:'esv',short:'ESV',name:'English Standard Version',available:true,saveKey:ESV_KEY,note:''}}
+function readActiveVersion(){const id=safeGet(VERSION_KEY)||'esv';const def=getVersion(id);return def.available?id:'esv'}
+function saveActiveVersion(id){safeSet(VERSION_KEY,id)}
 function readStoredTheme(){
   try{
-    const raw=localStorage.getItem(APP_KEY);
-    freshInstall=!raw;
-    if(!raw)return{appearance:'dark',accent:'neutral'};
-    const saved=JSON.parse(raw)?.settings||{};
-    return{
-      appearance:APPEARANCES.includes(saved.appearance)?saved.appearance:'dark',
-      accent:ACCENTS.includes(saved.accent)?saved.accent:'neutral'
-    };
-  }catch(e){freshInstall=true;return{appearance:'dark',accent:'neutral'}}
+    const global=JSON.parse(safeGet(THEME_KEY)||'null');
+    if(global)return{appearance:APPEARANCES.includes(global.appearance)?global.appearance:'dark',accent:ACCENTS.includes(global.accent)?global.accent:'neutral'};
+  }catch(_){}
+  for(const key of [getVersion(readActiveVersion()).saveKey,ESV_KEY]){
+    try{const raw=safeGet(key);if(!raw)continue;const settings=JSON.parse(raw)?.settings||{};return{appearance:APPEARANCES.includes(settings.appearance)?settings.appearance:'dark',accent:ACCENTS.includes(settings.accent)?settings.accent:'neutral'}}catch(_){}
+  }
+  return{appearance:'dark',accent:'neutral'};
 }
-function onboardingSeen(){try{return localStorage.getItem(ONBOARDING_KEY)==='1'}catch(e){return false}}
-function markOnboardingSeen(){try{localStorage.setItem(ONBOARDING_KEY,'1')}catch(e){}}
-function clearOnboardingSeen(){try{localStorage.removeItem(ONBOARDING_KEY)}catch(e){}}
+function saveTheme(){safeSet(THEME_KEY,JSON.stringify(selected))}
+function onboardingSeen(){return safeGet(ONBOARDING_KEY)==='1'}
+function markOnboardingSeen(){safeSet(ONBOARDING_KEY,'1')}
+function clearOnboardingSeen(){safeRemove(ONBOARDING_KEY)}
+function showNotice(message,type='info',duration=5000){clearTimeout(noticeTimer);notice.textContent=message;notice.className='notice'+(type==='error'?' error':'');noticeTimer=setTimeout(()=>notice.classList.add('hidden'),duration)}
 function syncChoices(){
   document.querySelectorAll('[data-mode-choice]').forEach(b=>b.classList.toggle('active',b.dataset.modeChoice===selected.appearance));
   document.querySelectorAll('[data-accent-choice]').forEach(b=>b.classList.toggle('active',b.dataset.accentChoice===selected.accent));
+  document.querySelectorAll('[data-version-choice]').forEach(b=>b.classList.toggle('active',b.dataset.versionChoice===selectedVersion));
 }
-function relabelNeutral(doc){
-  if(!doc)return;
-  doc.querySelectorAll('[data-action="set-accent"][data-value="neutral"]').forEach(btn=>{
-    const label=[...btn.querySelectorAll('span')].at(-1);
-    if(label&&label.textContent!=='Black / White')label.textContent='Black / White';
-    if(btn.title!=='Black / White')btn.title='Black / White';
+function relabelNeutral(doc){if(!doc)return;doc.querySelectorAll('[data-action="set-accent"][data-value="neutral"]').forEach(btn=>{const label=[...btn.querySelectorAll('span')].at(-1);if(label&&label.textContent!=='Black / White')label.textContent='Black / White';if(btn.title!=='Black / White')btn.title='Black / White'})}
+function chooseInsideApp(kind,value){const doc=frame.contentDocument;if(!doc)return false;const selector=kind==='appearance'?`[data-action="set-appearance"][data-value="${value}"]`:`[data-action="set-accent"][data-value="${value}"]`;const button=doc.querySelector(selector);if(!button)return false;button.click();return true}
+function applySelectedTheme(){chooseInsideApp('appearance',selected.appearance);chooseInsideApp('accent',selected.accent);relabelNeutral(frame.contentDocument);syncChoices()}
+function openOnboarding(){selectedVersion=activeVersion;onboarding.classList.remove('hidden');syncChoices();setTimeout(()=>document.querySelector('[data-version-choice].active,.choice.active,.accent.active')?.focus(),0)}
+function closeOnboarding(){onboarding.classList.add('hidden')}
+function getBaseSource(){if(!baseSourcePromise)baseSourcePromise=fetch('app.html',{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error(`Could not load app.html (${r.status}).`);return r.text()});return baseSourcePromise}
+
+function versionOptionsHTML(){return window.TMSVersions.list().map(def=>`<option value="${def.id}" ${def.id===activeVersion?'selected':''} ${def.available?'':'disabled'}>${def.name} (${def.short})${def.available?'':' — pending source'}</option>`).join('')}
+function injectVersionSettings(doc){
+  if(!doc||doc.querySelector('[data-shell-version-settings]'))return;
+  const firstStack=doc.querySelector('#view-settings .settings-grid .stack');
+  if(!firstStack)return;
+  const def=getVersion(activeVersion);
+  const card=doc.createElement('article');
+  card.className='card flat';
+  card.dataset.shellVersionSettings='1';
+  card.innerHTML=`<h2>Bible version</h2><div class="field"><label for="shell-version-select">Memorization text</label><select id="shell-version-select">${versionOptionsHTML()}</select><div class="help">Exact-recall progress is separate for each translation. Switching versions never marks the same verse mastered in another wording.</div></div><p class="tiny muted" style="margin-top:12px">${def.note||''}</p>${def.id!=='esv'?'<p class="tiny muted" style="margin-top:8px">After the first successful load, this 60-verse translation dataset is cached in this browser for later use.</p>':''}`;
+  firstStack.insertBefore(card,firstStack.children[1]||null);
+}
+function attachAppBridge(doc){
+  relabelNeutral(doc);injectVersionSettings(doc);
+  const observer=new MutationObserver(()=>{relabelNeutral(doc);injectVersionSettings(doc)});
+  observer.observe(doc.body,{childList:true,subtree:true});
+  doc.addEventListener('change',event=>{if(event.target.id==='shell-version-select'){const id=event.target.value;if(id&&id!==activeVersion)activateVersion(id)}});
+  doc.addEventListener('click',event=>{
+    const button=event.target.closest?.('[data-action]');if(!button)return;
+    if(button.dataset.action==='set-appearance'&&APPEARANCES.includes(button.dataset.value)){selected.appearance=button.dataset.value;saveTheme();syncChoices()}
+    if(button.dataset.action==='set-accent'&&ACCENTS.includes(button.dataset.value)){selected.accent=button.dataset.value;saveTheme();syncChoices()}
+    if(button.dataset.action==='reset-all')setTimeout(resetShellState,140);
+  },true);
+}
+function resetShellState(){
+  for(const def of window.TMSVersions.list()){
+    safeRemove(def.saveKey);safeRemove(def.saveKey+'-snapshots');
+    if(def.id!=='esv')window.TMSVersions.clearTranslationCache(def.id);
+  }
+  safeRemove(VERSION_KEY);safeRemove(THEME_KEY);clearOnboardingSeen();
+  selected={appearance:'dark',accent:'neutral'};selectedVersion='esv';activeVersion='esv';saveTheme();saveActiveVersion('esv');
+  loadVersion('esv').then(openOnboarding).catch(()=>openOnboarding());
+}
+async function loadVersion(id){
+  const serial=++loadSerial;
+  const def=getVersion(id);
+  if(!def.available)throw new Error(`${def.name} is not available yet because its authorized verse-text source has not been connected.`);
+  boot.textContent=def.id==='esv'?'Loading TMS 60…':`Loading ${def.name}…`;
+  boot.classList.remove('hidden');frame.classList.remove('ready');
+  const source=await getBaseSource();
+  const built=await window.TMSVersions.buildAppSource(source,id);
+  if(serial!==loadSerial)return;
+  return new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>reject(new Error('The memorization app did not finish loading.')),12000);
+    frame.onload=()=>{
+      clearTimeout(timer);
+      try{
+        const doc=frame.contentDocument;if(!doc)throw new Error('The memorization app could not be accessed.');
+        activeVersion=id;selectedVersion=id;saveActiveVersion(id);attachAppBridge(doc);applySelectedTheme();frame.classList.add('ready');boot.classList.add('hidden');syncChoices();resolve();
+      }catch(error){reject(error)}
+    };
+    frame.srcdoc=built.source;
   });
 }
-function chooseInsideApp(kind,value){
-  const doc=frame.contentDocument;
-  if(!doc)return false;
-  const selector=kind==='appearance'
-    ?`[data-action="set-appearance"][data-value="${value}"]`
-    :`[data-action="set-accent"][data-value="${value}"]`;
-  const button=doc.querySelector(selector);
-  if(!button)return false;
-  button.click();
-  return true;
+async function activateVersion(id){
+  const target=getVersion(id);if(!target.available){showNotice(`${target.name} is registered, but its authorized text source is still pending.`,'error');injectVersionSettings(frame.contentDocument);return false}
+  const previous=activeVersion;
+  try{await loadVersion(id);showNotice(`Bible version changed to ${target.name}.`);return true}catch(error){console.error(error);showNotice(`Could not load ${target.name}: ${error.message}`,'error',8000);if(previous!==id){try{await loadVersion(previous)}catch(_){}}return false}
 }
-function applySelectedTheme(){
-  chooseInsideApp('appearance',selected.appearance);
-  chooseInsideApp('accent',selected.accent);
-  relabelNeutral(frame.contentDocument);
-  syncChoices();
-}
-function openOnboarding(){onboarding.classList.remove('hidden');syncChoices();setTimeout(()=>document.querySelector('.choice.active,.accent.active')?.focus(),0)}
-function closeOnboarding(){onboarding.classList.add('hidden')}
 
-selected=readStoredTheme();
-syncChoices();
-document.querySelectorAll('[data-mode-choice]').forEach(button=>button.addEventListener('click',()=>{
-  const value=button.dataset.modeChoice;
-  if(!APPEARANCES.includes(value))return;
-  selected.appearance=value;applySelectedTheme();
-}));
-document.querySelectorAll('[data-accent-choice]').forEach(button=>button.addEventListener('click',()=>{
-  const value=button.dataset.accentChoice;
-  if(!ACCENTS.includes(value))return;
-  selected.accent=value;applySelectedTheme();
-}));
-finish.addEventListener('click',()=>{markOnboardingSeen();closeOnboarding();frame.focus()});
-
-frame.addEventListener('load',()=>{
-  const doc=frame.contentDocument;
-  if(!doc){boot.textContent='TMS 60 could not be loaded.';return}
-  if(freshInstall)selected={appearance:'dark',accent:'neutral'};
-  applySelectedTheme();
-  const observer=new MutationObserver(()=>relabelNeutral(doc));
-  observer.observe(doc.body,{childList:true,subtree:true});
-  doc.addEventListener('click',event=>{
-    const button=event.target.closest?.('[data-action="reset-all"]');
-    if(!button)return;
-    setTimeout(()=>{
-      selected={appearance:'dark',accent:'neutral'};
-      clearOnboardingSeen();
-      applySelectedTheme();
-      openOnboarding();
-    },120);
-  },true);
-  frame.classList.add('ready');
-  boot.classList.add('hidden');
-  if(!onboardingSeen())openOnboarding();
+document.querySelectorAll('[data-mode-choice]').forEach(button=>button.addEventListener('click',()=>{const value=button.dataset.modeChoice;if(!APPEARANCES.includes(value))return;selected.appearance=value;saveTheme();applySelectedTheme()}));
+document.querySelectorAll('[data-accent-choice]').forEach(button=>button.addEventListener('click',()=>{const value=button.dataset.accentChoice;if(!ACCENTS.includes(value))return;selected.accent=value;saveTheme();applySelectedTheme()}));
+document.querySelectorAll('[data-version-choice]').forEach(button=>button.addEventListener('click',()=>{const value=button.dataset.versionChoice;const def=getVersion(value);if(!def.available)return;selectedVersion=value;syncChoices()}));
+finish.addEventListener('click',async()=>{
+  finish.disabled=true;const original=finish.textContent;finish.textContent='Loading…';
+  if(selectedVersion!==activeVersion){const ok=await activateVersion(selectedVersion);if(!ok){finish.disabled=false;finish.textContent=original;return}}
+  markOnboardingSeen();closeOnboarding();finish.disabled=false;finish.textContent=original;frame.focus();
 });
+
+(async()=>{
+  selected=readStoredTheme();saveTheme();activeVersion=readActiveVersion();selectedVersion=activeVersion;syncChoices();
+  try{await loadVersion(activeVersion)}catch(error){console.error(error);showNotice(`Could not load ${getVersion(activeVersion).name}; falling back to ESV.`,'error',8000);activeVersion='esv';selectedVersion='esv';saveActiveVersion('esv');try{await loadVersion('esv')}catch(fallback){boot.textContent='TMS 60 could not be loaded.';console.error(fallback);return}}
+  if(!onboardingSeen())openOnboarding();
+})();
 </script>
 </body>
 </html>
