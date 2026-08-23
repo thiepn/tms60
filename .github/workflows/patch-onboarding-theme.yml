@@ -1,15 +1,16 @@
 name: Patch onboarding and default theme
 
 on:
-  issues:
-    types: [opened]
+  push:
+    branches: [main]
+    paths:
+      - .github/run-onboarding-theme-patch
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.event.issue.title == 'Run onboarding theme patch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
