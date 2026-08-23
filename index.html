@@ -112,10 +112,11 @@ function syncChoices(){
   document.querySelectorAll('[data-accent-choice]').forEach(b=>b.classList.toggle('active',b.dataset.accentChoice===selected.accent));
 }
 function relabelNeutral(doc){
+  if(!doc)return;
   doc.querySelectorAll('[data-action="set-accent"][data-value="neutral"]').forEach(btn=>{
     const label=[...btn.querySelectorAll('span')].at(-1);
-    if(label)label.textContent='Black / White';
-    btn.title='Black / White';
+    if(label&&label.textContent!=='Black / White')label.textContent='Black / White';
+    if(btn.title!=='Black / White')btn.title='Black / White';
   });
 }
 function chooseInsideApp(kind,value){
