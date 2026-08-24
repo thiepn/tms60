@@ -2,7 +2,6 @@
 (() => {
   const current = document.currentScript;
   const coreUrl = new URL('enhancements-core.js', current?.src || location.href).href;
-  const localizationUrl = new URL('localization-complete.js', current?.src || location.href).href;
   const topLevel = window.top === window;
   const FLAG = 'tms60-onboarding-v3';
   let needsUpgradeOnboarding = false;
@@ -39,13 +38,6 @@
   script.src = coreUrl;
   script.dataset.tmsVnextCore = '1';
   script.onload = () => {
-    if (!topLevel && !document.querySelector('script[data-tms-i18n-complete]')) {
-      const i18n = document.createElement('script');
-      i18n.src = localizationUrl;
-      i18n.dataset.tmsI18nComplete = '1';
-      document.head.appendChild(i18n);
-    }
-
     if (!topLevel || !needsUpgradeOnboarding) return;
     const frame = document.getElementById('app-frame');
     const show = () => {
