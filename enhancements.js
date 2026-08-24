@@ -7,6 +7,12 @@
   let needsUpgradeOnboarding = false;
 
   if (topLevel) {
+    if (!document.querySelector('link[rel="apple-touch-icon"]')) {
+      const touchIcon = document.createElement('link');
+      touchIcon.rel = 'apple-touch-icon';
+      touchIcon.href = new URL('icon-192.png', current?.src || location.href).href;
+      document.head.appendChild(touchIcon);
+    }
     try {
       needsUpgradeOnboarding = localStorage.getItem(FLAG) !== '1';
       if (needsUpgradeOnboarding) localStorage.removeItem('tms60-onboarding-v2');
