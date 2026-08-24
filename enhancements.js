@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const current = document.currentScript;
-  const BUILD = '20260824i';
+  const BUILD = '20260824j';
   const assetUrl = name => {
     const url = new URL(name, current?.src || location.href);
     url.searchParams.set('v', BUILD);
@@ -47,20 +47,29 @@
   script.async = false;
   script.onload = () => {
     if (!topLevel) {
-      document.querySelectorAll('script[data-tms-safe-i18n]').forEach(node => node.remove());
-      const i18n = document.createElement('script');
-      i18n.src = safeLocalizationUrl;
-      i18n.dataset.tmsSafeI18n = '1';
-      i18n.async = false;
-      i18n.onload = () => {
-        document.documentElement.dataset.tmsSafeI18n = 'loaded';
-        window.dispatchEvent(new Event('tms-safe-i18n-ready'));
-      };
-      i18n.onerror = () => {
-        document.documentElement.dataset.tmsSafeI18n = 'error';
-        console.error('TMS 60 localization completion layer failed to load.');
-      };
-      document.head.appendChild(i18n);
+      try {
+        const htmlLang = String(document.documentElement.lang || '').toLowerCase().split('-')[0];
+        if (['en','de','ko'].includes(htmlLang)) localStorage.setItem('tms60-ui-language-v1', htmlLang);
+      } catch (_) {}
+
+      fetch(safeLocalizationUrl, { cache: 'no-store' })
+        .then(response => {
+          if (!response.ok) throw new Error(`Localization asset returned HTTP ${response.status}.`);
+          return response.text();
+        })
+        .then(code => {
+          document.querySelectorAll('script[data-tms-safe-i18n]').forEach(node => node.remove());
+          const i18n = document.createElement('script');
+          i18n.textContent = `${code}\n//# sourceURL=${safeLocalizationUrl}`;
+          i18n.dataset.tmsSafeI18n = '1';
+          document.head.appendChild(i18n);
+          document.documentElement.dataset.tmsSafeI18n = window.__TMS_SAFE_I18N__ ? 'loaded' : 'not-initialized';
+          window.dispatchEvent(new Event('tms-safe-i18n-ready'));
+        })
+        .catch(error => {
+          document.documentElement.dataset.tmsSafeI18n = 'error';
+          console.error('TMS 60 localization completion layer failed to initialize.', error);
+        });
     }
 
     if (!topLevel || !needsUpgradeOnboarding) return;
