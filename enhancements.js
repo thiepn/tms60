@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const current = document.currentScript;
-  const BUILD = '20260824m';
+  const BUILD = '20260824n';
   const assetUrl = name => {
     const url = new URL(name, current?.src || location.href);
     url.searchParams.set('v', BUILD);
@@ -51,11 +51,23 @@
     document.head.appendChild(runtime);
   }
 
+  const NativeMutationObserver = window.MutationObserver;
+  if (!topLevel && NativeMutationObserver) {
+    // Suppress only observers created while enhancements-core.js initializes.
+    // Dynamic localization is handled incrementally by the parent runtime.
+    window.MutationObserver = class {
+      observe() {}
+      disconnect() {}
+      takeRecords() { return []; }
+    };
+  }
+
   const script = document.createElement('script');
   script.src = coreUrl;
   script.dataset.tmsVnextCore = '1';
   script.async = false;
   script.onload = () => {
+    if (!topLevel && NativeMutationObserver) window.MutationObserver = NativeMutationObserver;
     if (topLevel) loadLocalizationRuntime();
     if (!topLevel || !needsUpgradeOnboarding) return;
     const frame = document.getElementById('app-frame');
@@ -71,6 +83,9 @@
     });
     observer.observe(frame, { attributes: true, attributeFilter: ['class'] });
   };
-  script.onerror = () => console.error('TMS 60 experience layer failed to load.');
+  script.onerror = () => {
+    if (!topLevel && NativeMutationObserver) window.MutationObserver = NativeMutationObserver;
+    console.error('TMS 60 experience layer failed to load.');
+  };
   document.head.appendChild(script);
 })();
