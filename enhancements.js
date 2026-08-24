@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const current = document.currentScript;
-  const BUILD = '20260824o';
+  const BUILD = '20260824p';
   const assetUrl = name => {
     const url = new URL(name, current?.src || location.href);
     url.searchParams.set('v', BUILD);
@@ -65,8 +65,6 @@
 
   const NativeMutationObserver = window.MutationObserver;
   if (!topLevel && NativeMutationObserver) {
-    // Suppress only observers created while enhancements-core.js initializes.
-    // Dynamic localization is handled incrementally by the parent runtime.
     window.MutationObserver = class {
       observe() {}
       disconnect() {}
