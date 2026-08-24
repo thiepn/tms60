@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const current = document.currentScript;
-  const BUILD = '20260824h';
+  const BUILD = '20260824i';
   const assetUrl = name => {
     const url = new URL(name, current?.src || location.href);
     url.searchParams.set('v', BUILD);
@@ -44,11 +44,22 @@
   const script = document.createElement('script');
   script.src = coreUrl;
   script.dataset.tmsVnextCore = '1';
+  script.async = false;
   script.onload = () => {
-    if (!topLevel && !document.querySelector('script[data-tms-safe-i18n]')) {
+    if (!topLevel) {
+      document.querySelectorAll('script[data-tms-safe-i18n]').forEach(node => node.remove());
       const i18n = document.createElement('script');
       i18n.src = safeLocalizationUrl;
       i18n.dataset.tmsSafeI18n = '1';
+      i18n.async = false;
+      i18n.onload = () => {
+        document.documentElement.dataset.tmsSafeI18n = 'loaded';
+        window.dispatchEvent(new Event('tms-safe-i18n-ready'));
+      };
+      i18n.onerror = () => {
+        document.documentElement.dataset.tmsSafeI18n = 'error';
+        console.error('TMS 60 localization completion layer failed to load.');
+      };
       document.head.appendChild(i18n);
     }
 
@@ -66,5 +77,6 @@
     });
     observer.observe(frame, { attributes: true, attributeFilter: ['class'] });
   };
+  script.onerror = () => console.error('TMS 60 experience layer failed to load.');
   document.head.appendChild(script);
 })();
