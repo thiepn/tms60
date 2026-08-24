@@ -1,9 +1,15 @@
 'use strict';
 
-const NIV_BIBLE_ID = '78a9f6124f344018-01';
 const CACHE_TTL_SECONDS = 14 * 24 * 60 * 60;
 const UPSTREAM_TIMEOUT_MS = 12000;
 const CONCURRENCY = 5;
+
+const BIBLES = Object.freeze({
+  niv: Object.freeze({ id: '78a9f6124f344018-01', short: 'NIV', name: 'New International Version' }),
+  nlt: Object.freeze({ id: 'd6e14a625393b4da-01', short: 'NLT', name: 'New Living Translation' }),
+  hfa: Object.freeze({ id: 'da0947e25c9636bb-01', short: 'HFA', name: 'Hoffnung für Alle' }),
+  klb1985: Object.freeze({ id: 'e959e47176271f18-01', short: 'KLB 1985', name: 'Korean Living Bible 1985' })
+});
 
 const PASSAGES = Object.freeze([
   [1,'2CO.5.17'],[2,'GAL.2.20'],[3,'ROM.12.1'],[4,'JHN.14.21'],[5,'2TI.3.16-2TI.3.17'],[6,'JOS.1.8'],
@@ -57,7 +63,16 @@ function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), { status, headers });
 }
 
-async function fetchPassage(apiKey, passageId) {
+function resolveBible(pathname) {
+  if (pathname === '/v1/niv/tms60') return { slug: 'niv', bible: BIBLES.niv };
+  const match = pathname.match(/^\/v1\/bibles\/([a-z0-9-]+)\/tms60$/);
+  if (!match) return null;
+  const slug = match[1];
+  const bible = BIBLES[slug];
+  return bible ? { slug, bible } : null;
+}
+
+async function fetchPassage(apiKey, bibleId, passageId) {
   const params = new URLSearchParams({
     'content-type': 'text',
     'include-notes': 'false',
@@ -70,7 +85,7 @@ async function fetchPassage(apiKey, passageId) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
   try {
-    const response = await fetch(`https://rest.api.bible/v1/bibles/${NIV_BIBLE_ID}/passages/${encodeURIComponent(passageId)}?${params}`, {
+    const response = await fetch(`https://rest.api.bible/v1/bibles/${encodeURIComponent(bibleId)}/passages/${encodeURIComponent(passageId)}?${params}`, {
       method: 'GET',
       headers: { 'api-key': apiKey, 'Accept': 'application/json' },
       signal: controller.signal
@@ -89,7 +104,7 @@ async function fetchPassage(apiKey, passageId) {
   }
 }
 
-async function buildDataset(apiKey) {
+async function buildDataset(apiKey, slug, bible) {
   const results = new Array(PASSAGES.length);
   let cursor = 0;
   let copyright = '';
@@ -99,15 +114,21 @@ async function buildDataset(apiKey) {
       const index = cursor++;
       if (index >= PASSAGES.length) return;
       const [id, passageId] = PASSAGES[index];
-      const result = await fetchPassage(apiKey, passageId);
+      const result = await fetchPassage(apiKey, bible.id, passageId);
       results[index] = { id, text: result.text };
       if (!copyright && result.copyright) copyright = result.copyright;
     }
   }
 
   await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
-  if (results.some(item => !item?.text)) throw new Error('The NIV TMS dataset was incomplete.');
-  return { verses: results, copyright, fetchedAt: new Date().toISOString() };
+  if (results.some(item => !item?.text)) throw new Error(`The ${bible.short} TMS dataset was incomplete.`);
+  return {
+    version: slug,
+    bible: { id: bible.id, short: bible.short, name: bible.name },
+    verses: results,
+    copyright,
+    fetchedAt: new Date().toISOString()
+  };
 }
 
 export default {
@@ -123,40 +144,44 @@ export default {
     if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405, { 'Allow': 'GET, OPTIONS' });
 
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'tms60-niv-api' }, 200, { 'Cache-Control': 'no-store' });
+      return json({ ok: true, service: 'tms60-bible-api', versions: Object.keys(BIBLES) }, 200, { 'Cache-Control': 'no-store' });
     }
 
-    if (url.pathname !== '/v1/niv/tms60') return json({ error: 'Not found.' }, 404);
+    const resolved = resolveBible(url.pathname);
+    if (!resolved) return json({ error: 'Not found.' }, 404);
     if (origin === null) return json({ error: 'Origin not allowed.' }, 403);
     if (!env.API_BIBLE_KEY) {
-      console.error(JSON.stringify({ event: 'niv_proxy_error', reason: 'missing_api_key' }));
-      return withCors(json({ error: 'NIV service is not configured.' }, 503, { 'Cache-Control': 'no-store' }), origin);
+      console.error(JSON.stringify({ event: 'bible_proxy_error', reason: 'missing_api_key' }));
+      return withCors(json({ error: 'Bible service is not configured.' }, 503, { 'Cache-Control': 'no-store' }), origin);
     }
 
+    const { slug, bible } = resolved;
     const cache = caches.default;
-    const cacheKey = new Request(`${url.origin}/v1/niv/tms60`, { method: 'GET' });
+    const canonicalPath = `/v1/bibles/${slug}/tms60`;
+    const cacheKey = new Request(`${url.origin}${canonicalPath}`, { method: 'GET' });
     const cached = await cache.match(cacheKey);
     if (cached) return withCors(cached, origin);
 
     try {
-      const dataset = await buildDataset(env.API_BIBLE_KEY);
+      const dataset = await buildDataset(env.API_BIBLE_KEY, slug, bible);
       const response = json(dataset, 200, {
         'Cache-Control': `public, max-age=${CACHE_TTL_SECONDS}`,
         'CDN-Cache-Control': `public, max-age=${CACHE_TTL_SECONDS}`
       });
       ctx.waitUntil(cache.put(cacheKey, response.clone()));
-      console.log(JSON.stringify({ event: 'niv_dataset_refresh', verses: dataset.verses.length }));
+      console.log(JSON.stringify({ event: 'bible_dataset_refresh', version: slug, verses: dataset.verses.length }));
       return withCors(response, origin);
     } catch (error) {
       const status = Number(error?.status || 0);
       const upstreamAuth = status === 401 || status === 403;
       console.error(JSON.stringify({
-        event: 'niv_proxy_error',
+        event: 'bible_proxy_error',
+        version: slug,
         reason: upstreamAuth ? 'upstream_auth' : 'upstream_failure',
         status: status || undefined,
         message: String(error?.message || error).slice(0, 300)
       }));
-      return withCors(json({ error: upstreamAuth ? 'NIV service authorization needs attention.' : 'NIV service is temporarily unavailable.' }, 502, { 'Cache-Control': 'no-store' }), origin);
+      return withCors(json({ error: upstreamAuth ? `${bible.short} authorization needs attention.` : `${bible.short} is temporarily unavailable.` }, 502, { 'Cache-Control': 'no-store' }), origin);
     }
   }
 };

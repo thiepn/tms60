@@ -1,7 +1,8 @@
 /* TMS 60 translation adapter.
  * ESV remains bundled in app.html. Schlachter 1951 and Korean Revised Version
  * 1952/1961 are loaded from the GetBible v2 query API and cached locally.
- * NIV is loaded automatically through the TMS 60 server-side API.Bible proxy.
+ * NIV, NLT, Hoffnung für Alle, and Korean Living Bible 1985 load automatically
+ * through the TMS 60 server-side API.Bible proxy.
  */
 'use strict';
 (() => {
@@ -13,13 +14,28 @@
     }),
     niv: Object.freeze({
       id: 'niv', short: 'NIV', name: 'New International Version', language: 'English',
-      available: true, bundled: false, source: 'proxy', saveKey: 'tms60-niv-memory-lab-v1',
+      available: true, bundled: false, source: 'proxy', proxySlug: 'niv', saveKey: 'tms60-niv-memory-lab-v1',
+      note: 'Loads automatically through the TMS 60 server-side API.Bible integration. No user API key is required.'
+    }),
+    nlt: Object.freeze({
+      id: 'nlt', short: 'NLT', name: 'New Living Translation', language: 'English',
+      available: true, bundled: false, source: 'proxy', proxySlug: 'nlt', saveKey: 'tms60-nlt-memory-lab-v1',
+      note: 'Loads automatically through the TMS 60 server-side API.Bible integration. No user API key is required.'
+    }),
+    hfa: Object.freeze({
+      id: 'hfa', short: 'HFA', name: 'Hoffnung für Alle', language: 'Deutsch',
+      available: true, bundled: false, source: 'proxy', proxySlug: 'hfa', saveKey: 'tms60-hfa-memory-lab-v1',
       note: 'Loads automatically through the TMS 60 server-side API.Bible integration. No user API key is required.'
     }),
     schlachter1951: Object.freeze({
       id: 'schlachter1951', short: 'SCH1951', name: 'Schlachter 1951', language: 'Deutsch',
       available: true, bundled: false, api: 'schlachter', saveKey: 'tms60-sch1951-memory-lab-v1',
       note: 'Schlachter-Bibel 1951. © 1951 Genfer Bibelgesellschaft. CC BY 4.0 attribution/source information: eBible.org.'
+    }),
+    klb1985: Object.freeze({
+      id: 'klb1985', short: 'KLB 1985', name: 'Korean Living Bible 1985', language: '한국어',
+      available: true, bundled: false, source: 'proxy', proxySlug: 'klb1985', saveKey: 'tms60-klb1985-memory-lab-v1',
+      note: 'Loads automatically through the TMS 60 server-side API.Bible integration. No user API key is required.'
     }),
     krv1961: Object.freeze({
       id: 'krv1961', short: '개역한글', name: '개역한글 (1961)', language: '한국어',
@@ -41,9 +57,9 @@
 
   const CACHE_SCHEMA = 2;
   const CACHE_PREFIX = 'tms60-translation-texts-v2-';
-  const NIV_CACHE_MAX_AGE = 14 * 24 * 60 * 60 * 1000;
+  const PROXY_CACHE_MAX_AGE = 14 * 24 * 60 * 60 * 1000;
   const LEGACY_API_BIBLE_KEY_STORAGE = 'tms60-api-bible-key-v1';
-  let nivServiceConfigPromise = null;
+  let bibleServiceConfigPromise = null;
 
   function normalizeText(value) {
     return String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -79,9 +95,9 @@
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (parsed?.schema !== CACHE_SCHEMA || !Array.isArray(parsed.verses) || parsed.verses.length !== baseVerses.length) return null;
-      if (def.id === 'niv') {
+      if (def.source === 'proxy') {
         const fetchedAt = Date.parse(parsed.fetchedAt || '');
-        if (!Number.isFinite(fetchedAt) || Date.now() - fetchedAt > NIV_CACHE_MAX_AGE) return null;
+        if (!Number.isFinite(fetchedAt) || Date.now() - fetchedAt > PROXY_CACHE_MAX_AGE) return null;
       } else if (parsed?.api !== def.api) return null;
 
       const textById = new Map(parsed.verses.map(v => [Number(v.id), normalizeText(v.text)]));
@@ -144,35 +160,36 @@
     return { verses: translated, copyright: '' };
   }
 
-  async function getNivProxyBaseUrl() {
-    const injected = normalizeText(window.TMS_NIV_PROXY_URL || '');
+  async function getBibleProxyBaseUrl() {
+    const injected = normalizeText(window.TMS_BIBLE_PROXY_URL || window.TMS_NIV_PROXY_URL || '');
     if (injected) return validateProxyUrl(injected);
-    if (!nivServiceConfigPromise) {
-      nivServiceConfigPromise = fetch('niv-service.json', { cache: 'no-store', headers: { 'Accept': 'application/json' } })
+    if (!bibleServiceConfigPromise) {
+      bibleServiceConfigPromise = fetch('niv-service.json', { cache: 'no-store', headers: { 'Accept': 'application/json' } })
         .then(async response => {
-          if (!response.ok) throw new Error(`NIV service configuration returned HTTP ${response.status}.`);
+          if (!response.ok) throw new Error(`Bible service configuration returned HTTP ${response.status}.`);
           return response.json();
         })
         .then(config => validateProxyUrl(normalizeText(config?.baseUrl || '')));
     }
-    return nivServiceConfigPromise;
+    return bibleServiceConfigPromise;
   }
 
   function validateProxyUrl(value) {
-    if (!value) throw new Error('NIV is not connected to the server-side service yet. The app owner must deploy the TMS 60 NIV Worker first.');
+    if (!value) throw new Error('The server-side Bible service is not connected yet. The app owner must deploy the TMS 60 Bible Worker first.');
     let url;
-    try { url = new URL(value, location.href); } catch (_) { throw new Error('The NIV service URL is invalid.'); }
+    try { url = new URL(value, location.href); } catch (_) { throw new Error('The Bible service URL is invalid.'); }
     const local = ['localhost', '127.0.0.1'].includes(url.hostname);
-    if (url.protocol !== 'https:' && !(local && url.protocol === 'http:')) throw new Error('The NIV service must use HTTPS.');
+    if (url.protocol !== 'https:' && !(local && url.protocol === 'http:')) throw new Error('The Bible service must use HTTPS.');
     return url.href.replace(/\/+$/, '');
   }
 
-  async function fetchNivVerses(def, baseVerses) {
+  async function fetchProxyVerses(def, baseVerses) {
     const cached = readCachedTexts(def, baseVerses);
     if (cached) return cached;
+    if (!def.proxySlug) throw new Error(`${def.short} has no server-side source configured.`);
 
-    const baseUrl = await getNivProxyBaseUrl();
-    const response = await fetch(`${baseUrl}/v1/niv/tms60`, {
+    const baseUrl = await getBibleProxyBaseUrl();
+    const response = await fetch(`${baseUrl}/v1/bibles/${encodeURIComponent(def.proxySlug)}/tms60`, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
       cache: 'no-store'
@@ -180,29 +197,29 @@
     if (!response.ok) {
       let detail = '';
       try { detail = normalizeText((await response.json())?.error || ''); } catch (_) {}
-      throw new Error(detail || `NIV service returned HTTP ${response.status}.`);
+      throw new Error(detail || `${def.short} service returned HTTP ${response.status}.`);
     }
     const payload = await response.json();
-    if (!payload || !Array.isArray(payload.verses) || payload.verses.length !== 60) throw new Error('NIV service returned an incomplete TMS dataset.');
+    if (!payload || !Array.isArray(payload.verses) || payload.verses.length !== 60) throw new Error(`${def.short} service returned an incomplete TMS dataset.`);
 
     const seen = new Set();
     const textById = new Map();
     for (const item of payload.verses) {
       const id = Number(item?.id), text = normalizeText(item?.text);
-      if (!Number.isInteger(id) || id < 1 || id > 60 || seen.has(id) || !text) throw new Error('NIV service returned an invalid TMS dataset.');
+      if (!Number.isInteger(id) || id < 1 || id > 60 || seen.has(id) || !text) throw new Error(`${def.short} service returned an invalid TMS dataset.`);
       seen.add(id); textById.set(id, text);
     }
-    if (seen.size !== 60) throw new Error('NIV service returned an incomplete TMS dataset.');
+    if (seen.size !== 60) throw new Error(`${def.short} service returned an incomplete TMS dataset.`);
 
     const translated = baseVerses.map(base => ({ ...base, text: textById.get(base.id) || '' }));
-    if (translated.some(v => !v.text)) throw new Error('NIV service is missing one or more TMS passages.');
+    if (translated.some(v => !v.text)) throw new Error(`${def.short} service is missing one or more TMS passages.`);
     const copyright = normalizeText(payload.copyright || '');
     writeCachedTexts(def, translated, copyright);
     return { verses: translated, copyright };
   }
 
   async function fetchTranslatedVerses(def, baseVerses) {
-    return def.id === 'niv' ? fetchNivVerses(def, baseVerses) : fetchGetBibleVerses(def, baseVerses);
+    return def.source === 'proxy' ? fetchProxyVerses(def, baseVerses) : fetchGetBibleVerses(def, baseVerses);
   }
 
   function extractBaseVerses(source) {
@@ -242,25 +259,37 @@
     patched = replaceOnce(patched, "const KEY='tms60-esv-memory-lab-v1'", `const KEY='${def.saveKey}'`);
     patched = patched.replace(/Exact ESV recall/g, `Exact ${def.short} recall`);
     patched = patched.replace(/TMS 60 ESV Memory Lab/g, `TMS 60 ${def.short} Memory Lab`);
-    if (def.id === 'niv') patched = injectRuntimeCopyright(patched, dataset.copyright);
+    if (def.source === 'proxy') patched = injectRuntimeCopyright(patched, dataset.copyright);
     return { source: patched, definition: def, verses };
   }
 
-  function enableNivShellUI() {
-    const button = document.querySelector('[data-version-choice="niv"]');
-    if (button) {
-      button.disabled = false;
+  function ensureVersionButtons() {
+    const container = document.getElementById('version-options');
+    if (!container) return;
+
+    for (const def of Object.values(VERSION_DEFS)) {
+      let button = container.querySelector(`[data-version-choice="${def.id}"]`);
+      if (!button) {
+        button = document.createElement('button');
+        button.className = 'version-choice';
+        button.type = 'button';
+        button.dataset.versionChoice = def.id;
+        button.innerHTML = `<strong>${escapeHtml(def.name)}</strong><span class="lang">${escapeHtml(def.language)}</span><small></small>`;
+      }
+      button.disabled = !def.available;
       const small = button.querySelector('small');
       if (small) {
         small.classList.remove('pending');
-        small.textContent = 'NIV · automatic';
+        if (def.bundled) small.textContent = `${def.short} · bundled`;
+        else if (def.source === 'proxy') small.textContent = `${def.short} · automatic`;
+        else small.textContent = `${def.short} · first load requires internet`;
       }
+      container.appendChild(button);
     }
+
     const note = document.querySelector('.legal-note');
     if (note) {
-      note.textContent = note.textContent
-        .replace('NIV remains disabled until an authorized Biblica text source is connected.', 'NIV loads automatically through the TMS 60 server-side API.Bible integration.')
-        .replace('NIV loads through API.Bible and requires an API.Bible key with NIV access.', 'NIV loads automatically through the TMS 60 server-side API.Bible integration.');
+      note.textContent = 'ESV is bundled with TMS 60. NIV, NLT, Hoffnung für Alle, and Korean Living Bible 1985 load automatically through the licensed API.Bible integration. Schlachter 1951 © 1951 Genfer Bibelgesellschaft; CC BY 4.0 attribution/source information: eBible.org. 개역한글 1952/1961 is supplied from the public-domain GetBible/Wikisource source.';
     }
   }
 
@@ -278,8 +307,8 @@
     }
   });
 
-  enableNivShellUI();
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enableNivShellUI, { once: true });
+  ensureVersionButtons();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ensureVersionButtons, { once: true });
 })();
 
 (() => {
