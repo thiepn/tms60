@@ -1,10 +1,10 @@
 'use strict';
 
-const WORKER_BUILD = '2026-08-25-multibible-3-free-safe';
+const WORKER_BUILD = '2026-08-25-multibible-4-free-safe';
 const CACHE_TTL_SECONDS = 14 * 24 * 60 * 60;
 const UPSTREAM_TIMEOUT_MS = 15000;
 const CONCURRENCY = 3;
-const MAX_RETRY_SUBREQUESTS = 12;
+const MAX_RETRY_SUBREQUESTS = 9;
 
 const BIBLES = Object.freeze({
   niv: Object.freeze({ id: '78a9f6124f344018-01', short: 'NIV', name: 'New International Version' }),
@@ -26,28 +26,30 @@ const PASSAGES = Object.freeze([
 ]);
 
 /*
- * Cloudflare Workers Free allows only 50 external subrequests per incoming
- * request. Fetching all 60 TMS passages individually can never succeed on that
- * plan. These 34 grouped ranges cover all 60 TMS references while staying
- * safely below the limit. API.Bible JSON content exposes verseOrgIds, which we
- * use to extract only the exact TMS verses from each broader range.
+ * Cloudflare Workers Free allows 50 external subrequests per invocation.
+ * The original one-request-per-TMS-passage implementation needed 60 and could
+ * never finish on that plan. These 40 ranges merge only nearby targets, keep
+ * payloads relatively small, and leave room for up to 9 retries (49 maximum
+ * external subrequests). API.Bible JSON verseOrgIds let us extract only the
+ * exact TMS verses from the grouped responses.
  */
 const FETCH_RANGES = Object.freeze([
-  '2CO.4.5-2CO.5.17','2CO.9.6-2CO.9.7',
+  '2CO.4.5-2CO.5.17',
   'GAL.2.20-GAL.6.10',
-  'ROM.1.16-ROM.6.23','ROM.8.32-ROM.12.2',
-  'JHN.1.12-JHN.5.24','JHN.13.34-JHN.15.7',
-  '2TI.3.16-2TI.3.17','JOS.1.8',
-  'PHP.2.3-PHP.4.19',
-  'MAT.4.19-MAT.6.33','MAT.18.20','MAT.28.19-MAT.28.20',
-  'HEB.2.18','HEB.9.27-HEB.12.3',
-  'ISA.26.3','ISA.41.10','ISA.53.6',
-  '1PE.2.11-1PE.5.7','EPH.2.8-EPH.5.3',
-  'TIT.3.5','REV.3.20','1JN.2.15-1JN.5.13',
-  '1CO.2.12-1CO.3.16','1CO.15.58',
-  'LAM.3.22-LAM.3.23','NUM.23.19','PSA.119.9-PSA.119.11',
-  'LUK.9.23','MRK.10.45','PRO.3.9-PRO.3.10',
-  'ACT.1.8','ACT.24.16','LEV.19.11'
+  'ROM.12.1-ROM.12.2',
+  'JHN.13.34-JHN.15.7',
+  'PHP.4.6-PHP.4.19',
+  'MAT.4.19-MAT.6.33',
+  'HEB.9.27-HEB.12.3',
+  '1PE.5.5-1PE.5.7',
+  '1JN.2.15-1JN.5.13',
+  '1CO.2.12-1CO.3.16',
+  'ROM.3.23-ROM.6.23',
+  'EPH.2.8-EPH.5.3',
+  '2TI.3.16-2TI.3.17','JOS.1.8','MAT.18.20','ROM.1.16','ISA.53.6','1PE.3.18','TIT.3.5','JHN.1.12',
+  'REV.3.20','JHN.5.24','ISA.41.10','LAM.3.22-LAM.3.23','NUM.23.19','ISA.26.3','ROM.8.32','HEB.2.18',
+  'PSA.119.9-PSA.119.11','LUK.9.23','1CO.15.58','MRK.10.45','PRO.3.9-PRO.3.10','2CO.9.6-2CO.9.7',
+  'ACT.1.8','MAT.28.19-MAT.28.20','PHP.2.3-PHP.2.4','1PE.2.11','LEV.19.11','ACT.24.16'
 ]);
 
 function normalizeText(value) {
