@@ -32,7 +32,19 @@
   script.src = coreUrl;
   script.dataset.tmsVnextCore = '1';
   script.onload = () => {
-    if (topLevel && needsUpgradeOnboarding && typeof window.openOnboarding === 'function') window.openOnboarding();
+    if (!topLevel || !needsUpgradeOnboarding) return;
+    const frame = document.getElementById('app-frame');
+    const show = () => {
+      if (frame && !frame.classList.contains('ready')) return false;
+      if (typeof window.openOnboarding !== 'function') return false;
+      window.openOnboarding();
+      return true;
+    };
+    if (show() || !frame) return;
+    const observer = new MutationObserver(() => {
+      if (show()) observer.disconnect();
+    });
+    observer.observe(frame, { attributes: true, attributeFilter: ['class'] });
   };
   document.head.appendChild(script);
 })();
