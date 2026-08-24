@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const current = document.currentScript;
-  const BUILD = '20260825a';
+  const BUILD = '20260825b';
   const assetUrl = name => {
     const url = new URL(name, current?.src || location.href);
     url.searchParams.set('v', BUILD);
@@ -25,36 +25,56 @@
     const grid = settings?.querySelector('.settings-grid');
     if (!doc || !grid) return;
 
-    const languageCard = doc.getElementById('ui-language-settings-card') || doc.querySelector('[data-ui-language-settings]');
+    /* The deterministic localization layer owns this card. Keep it directly
+       under .settings-grid so that layer never removes/recreates it. */
+    const languageCard = doc.getElementById('ui-language-settings-card');
     const versionCard = doc.querySelector('[data-shell-version-settings]');
     if (!languageCard || !versionCard) return;
+
+    /* Remove the older iframe-injected duplicate language card if it exists. */
+    doc.querySelectorAll('[data-ui-language-settings]').forEach(card => {
+      if (card !== languageCard) card.remove();
+    });
+    languageCard.dataset.uiLanguageSettings = '1';
+
+    const oldRow = doc.getElementById('settings-language-version-row');
+    if (oldRow) {
+      if (languageCard.parentElement === oldRow) grid.prepend(languageCard);
+      if (versionCard.parentElement === oldRow) grid.prepend(versionCard);
+      oldRow.remove();
+    }
 
     let style = doc.getElementById('settings-language-version-style');
     if (!style) {
       style = doc.createElement('style');
       style.id = 'settings-language-version-style';
-      style.textContent = '#settings-language-version-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}#settings-language-version-row>.card{height:100%;margin:0}@media(max-width:760px){#settings-language-version-row{grid-template-columns:1fr}}';
+      style.textContent = [
+        '#view-settings .settings-grid>#ui-language-settings-card{grid-column:1!important;grid-row:1!important;min-width:0;margin:0}',
+        '#view-settings .settings-grid>[data-shell-version-settings]{grid-column:2!important;grid-row:1!important;min-width:0;margin:0}',
+        '#view-settings .settings-grid>#ui-language-settings-card select,#view-settings .settings-grid>[data-shell-version-settings] select{width:100%;min-width:0}',
+        '@media(max-width:560px){#view-settings .settings-grid>#ui-language-settings-card,#view-settings .settings-grid>[data-shell-version-settings]{padding:14px}#view-settings .settings-grid>#ui-language-settings-card h2,#view-settings .settings-grid>[data-shell-version-settings] h2{font-size:1rem}}'
+      ].join('');
       doc.head.appendChild(style);
     }
 
-    let row = doc.getElementById('settings-language-version-row');
-    if (!row) {
-      row = doc.createElement('div');
-      row.id = 'settings-language-version-row';
-      grid.prepend(row);
-    } else if (row.parentElement !== grid) {
-      grid.prepend(row);
-    }
+    /* Both controls stay as direct grid children. No DOM relocation occurs
+       when either select is opened or changed. */
+    if (languageCard.parentElement !== grid) grid.prepend(languageCard);
+    if (versionCard.parentElement !== grid) grid.insertBefore(versionCard, languageCard.nextSibling);
+    else if (versionCard.previousElementSibling !== languageCard) grid.insertBefore(versionCard, languageCard.nextSibling);
 
-    if (languageCard.parentElement !== row) row.appendChild(languageCard);
-    if (versionCard.parentElement !== row) row.appendChild(versionCard);
+    languageCard.style.gridColumn = '1';
+    languageCard.style.gridRow = '1';
+    versionCard.style.gridColumn = '2';
+    versionCard.style.gridRow = '1';
   }
 
   function scheduleSettingsPreferences() {
     if (settingsLayoutScheduled) return;
     settingsLayoutScheduled = true;
-    setTimeout(organizeSettingsPreferences, 20);
-    setTimeout(organizeSettingsPreferences, 120);
+    setTimeout(organizeSettingsPreferences, 40);
+    setTimeout(organizeSettingsPreferences, 160);
+    setTimeout(organizeSettingsPreferences, 320);
   }
 
   function bindSettingsPreferences() {
@@ -64,8 +84,9 @@
     if (!doc?.body) return;
     if (settingsLayoutDoc !== doc) {
       settingsLayoutDoc = doc;
-      doc.addEventListener('click', scheduleSettingsPreferences, false);
-      doc.addEventListener('change', scheduleSettingsPreferences, false);
+      doc.addEventListener('click', event => {
+        if (event.target?.closest?.('[data-view="settings"]')) scheduleSettingsPreferences();
+      }, false);
     }
     scheduleSettingsPreferences();
   }
