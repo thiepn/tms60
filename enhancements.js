@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const current = document.currentScript;
-  const BUILD = '20260824p';
+  const BUILD = '20260825a';
   const assetUrl = name => {
     const url = new URL(name, current?.src || location.href);
     url.searchParams.set('v', BUILD);
@@ -13,6 +13,62 @@
   const topLevel = window.top === window;
   const FLAG = 'tms60-onboarding-v3';
   let needsUpgradeOnboarding = false;
+  let settingsLayoutDoc = null;
+  let settingsLayoutScheduled = false;
+
+  function organizeSettingsPreferences() {
+    settingsLayoutScheduled = false;
+    if (!topLevel) return;
+    const frame = document.getElementById('app-frame');
+    const doc = frame?.contentDocument;
+    const settings = doc?.getElementById('view-settings');
+    const grid = settings?.querySelector('.settings-grid');
+    if (!doc || !grid) return;
+
+    const languageCard = doc.getElementById('ui-language-settings-card') || doc.querySelector('[data-ui-language-settings]');
+    const versionCard = doc.querySelector('[data-shell-version-settings]');
+    if (!languageCard || !versionCard) return;
+
+    let style = doc.getElementById('settings-language-version-style');
+    if (!style) {
+      style = doc.createElement('style');
+      style.id = 'settings-language-version-style';
+      style.textContent = '#settings-language-version-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}#settings-language-version-row>.card{height:100%;margin:0}@media(max-width:760px){#settings-language-version-row{grid-template-columns:1fr}}';
+      doc.head.appendChild(style);
+    }
+
+    let row = doc.getElementById('settings-language-version-row');
+    if (!row) {
+      row = doc.createElement('div');
+      row.id = 'settings-language-version-row';
+      grid.prepend(row);
+    } else if (row.parentElement !== grid) {
+      grid.prepend(row);
+    }
+
+    if (languageCard.parentElement !== row) row.appendChild(languageCard);
+    if (versionCard.parentElement !== row) row.appendChild(versionCard);
+  }
+
+  function scheduleSettingsPreferences() {
+    if (settingsLayoutScheduled) return;
+    settingsLayoutScheduled = true;
+    setTimeout(organizeSettingsPreferences, 20);
+    setTimeout(organizeSettingsPreferences, 120);
+  }
+
+  function bindSettingsPreferences() {
+    if (!topLevel) return;
+    const frame = document.getElementById('app-frame');
+    const doc = frame?.contentDocument;
+    if (!doc?.body) return;
+    if (settingsLayoutDoc !== doc) {
+      settingsLayoutDoc = doc;
+      doc.addEventListener('click', scheduleSettingsPreferences, false);
+      doc.addEventListener('change', scheduleSettingsPreferences, false);
+    }
+    scheduleSettingsPreferences();
+  }
 
   if (topLevel) {
     if (!document.querySelector('link[rel="apple-touch-icon"]')) {
@@ -25,6 +81,9 @@
       needsUpgradeOnboarding = localStorage.getItem(FLAG) !== '1';
       if (needsUpgradeOnboarding) localStorage.removeItem('tms60-onboarding-v2');
     } catch (_) {}
+
+    const frame = document.getElementById('app-frame');
+    if (frame) frame.addEventListener('load', () => setTimeout(bindSettingsPreferences, 0));
 
     const bindCompletion = () => {
       const onboarding = document.getElementById('onboarding');
@@ -48,6 +107,10 @@
     completion.src = completionUrl;
     completion.dataset.tmsLocalizationCompletion = '1';
     completion.async = false;
+    completion.onload = () => {
+      bindSettingsPreferences();
+      scheduleSettingsPreferences();
+    };
     completion.onerror = () => console.error('TMS 60 localization completion layer failed to load.');
     document.head.appendChild(completion);
   }
@@ -78,7 +141,10 @@
   script.async = false;
   script.onload = () => {
     if (!topLevel && NativeMutationObserver) window.MutationObserver = NativeMutationObserver;
-    if (topLevel) loadLocalizationRuntime();
+    if (topLevel) {
+      loadLocalizationRuntime();
+      bindSettingsPreferences();
+    }
     if (!topLevel || !needsUpgradeOnboarding) return;
     const frame = document.getElementById('app-frame');
     const show = () => {
