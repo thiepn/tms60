@@ -353,3 +353,11 @@
   enableNivShellUI();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enableNivShellUI, { once: true });
 })();
+
+(() => {
+  function loadEnhancements(){
+    if(document.querySelector('script[data-tms-vnext-loader]'))return;
+    const s=document.createElement('script');s.src='enhancements.js';s.dataset.tmsVnextLoader='1';document.head.appendChild(s);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadEnhancements,{once:true});else loadEnhancements();
+})();
