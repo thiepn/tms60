@@ -1,8 +1,14 @@
 'use strict';
 (() => {
   const current = document.currentScript;
-  const coreUrl = new URL('enhancements-core.js', current?.src || location.href).href;
-  const safeLocalizationUrl = new URL('localization-safe.js', current?.src || location.href).href;
+  const BUILD = '20260824h';
+  const assetUrl = name => {
+    const url = new URL(name, current?.src || location.href);
+    url.searchParams.set('v', BUILD);
+    return url.href;
+  };
+  const coreUrl = assetUrl('enhancements-core.js');
+  const safeLocalizationUrl = assetUrl('localization-safe.js');
   const topLevel = window.top === window;
   const FLAG = 'tms60-onboarding-v3';
   let needsUpgradeOnboarding = false;
