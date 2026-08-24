@@ -1,8 +1,10 @@
 'use strict';
 
+const WORKER_BUILD = '2026-08-25-multibible-2';
 const CACHE_TTL_SECONDS = 14 * 24 * 60 * 60;
-const UPSTREAM_TIMEOUT_MS = 12000;
-const CONCURRENCY = 5;
+const UPSTREAM_TIMEOUT_MS = 15000;
+const CONCURRENCY = 3;
+const MAX_ATTEMPTS = 3;
 
 const BIBLES = Object.freeze({
   niv: Object.freeze({ id: '78a9f6124f344018-01', short: 'NIV', name: 'New International Version' }),
@@ -27,8 +29,12 @@ function normalizeText(value) {
   return String(value ?? '').replace(/\s+/g, ' ').trim();
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function allowedOrigins(env) {
-  return String(env.ALLOWED_ORIGINS || 'https://thiepn.github.io')
+  return String(env.ALLOWED_ORIGINS || 'https://thiepn.github.io,https://thiepn.dev')
     .split(',').map(value => value.trim()).filter(Boolean);
 }
 
@@ -39,6 +45,7 @@ function corsOrigin(request, env) {
   try {
     const url = new URL(origin);
     if ((url.hostname === 'localhost' || url.hostname === '127.0.0.1') && (url.protocol === 'http:' || url.protocol === 'https:')) return origin;
+    if ((url.hostname === 'thiepn.dev' || url.hostname.endsWith('.thiepn.dev')) && url.protocol === 'https:') return origin;
   } catch (_) {}
   return null;
 }
@@ -82,26 +89,42 @@ async function fetchPassage(apiKey, bibleId, passageId) {
     'include-verse-spans': 'false',
     'use-org-id': 'true'
   });
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
-  try {
-    const response = await fetch(`https://rest.api.bible/v1/bibles/${encodeURIComponent(bibleId)}/passages/${encodeURIComponent(passageId)}?${params}`, {
-      method: 'GET',
-      headers: { 'api-key': apiKey, 'Accept': 'application/json' },
-      signal: controller.signal
-    });
-    if (!response.ok) {
+
+  let lastError = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+    try {
+      const response = await fetch(`https://rest.api.bible/v1/bibles/${encodeURIComponent(bibleId)}/passages/${encodeURIComponent(passageId)}?${params}`, {
+        method: 'GET',
+        headers: { 'api-key': apiKey, 'Accept': 'application/json' },
+        signal: controller.signal
+      });
+      if (response.ok) {
+        const payload = await response.json();
+        const text = normalizeText(payload?.data?.content);
+        if (!text) throw new Error(`API.Bible returned empty content for ${passageId}.`);
+        return { text, copyright: normalizeText(payload?.data?.copyright || '') };
+      }
+
       const error = new Error(`API.Bible returned ${response.status} for ${passageId}.`);
       error.status = response.status;
-      throw error;
+      lastError = error;
+      const retryable = response.status === 429 || response.status === 500 || response.status === 502 || response.status === 503 || response.status === 504;
+      if (!retryable || attempt === MAX_ATTEMPTS) throw error;
+      const retryAfter = Number(response.headers.get('Retry-After'));
+      await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 5000) : 350 * attempt);
+    } catch (error) {
+      lastError = error;
+      const status = Number(error?.status || 0);
+      const retryable = !status || status === 429 || status >= 500;
+      if (!retryable || attempt === MAX_ATTEMPTS) throw error;
+      await sleep(350 * attempt);
+    } finally {
+      clearTimeout(timer);
     }
-    const payload = await response.json();
-    const text = normalizeText(payload?.data?.content);
-    if (!text) throw new Error(`API.Bible returned empty content for ${passageId}.`);
-    return { text, copyright: normalizeText(payload?.data?.copyright || '') };
-  } finally {
-    clearTimeout(timer);
   }
+  throw lastError || new Error(`API.Bible request failed for ${passageId}.`);
 }
 
 async function buildDataset(apiKey, slug, bible) {
@@ -144,15 +167,21 @@ export default {
     if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405, { 'Allow': 'GET, OPTIONS' });
 
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'tms60-bible-api', versions: Object.keys(BIBLES) }, 200, { 'Cache-Control': 'no-store' });
+      return json({
+        ok: true,
+        service: 'tms60-bible-api',
+        build: WORKER_BUILD,
+        versions: Object.keys(BIBLES),
+        apiKeyConfigured: Boolean(env.API_BIBLE_KEY)
+      }, 200, { 'Cache-Control': 'no-store' });
     }
 
     const resolved = resolveBible(url.pathname);
-    if (!resolved) return json({ error: 'Not found.' }, 404);
+    if (!resolved) return json({ error: 'Not found.', build: WORKER_BUILD }, 404);
     if (origin === null) return json({ error: 'Origin not allowed.' }, 403);
     if (!env.API_BIBLE_KEY) {
-      console.error(JSON.stringify({ event: 'bible_proxy_error', reason: 'missing_api_key' }));
-      return withCors(json({ error: 'Bible service is not configured.' }, 503, { 'Cache-Control': 'no-store' }), origin);
+      console.error(JSON.stringify({ event: 'bible_proxy_error', reason: 'missing_api_key', build: WORKER_BUILD }));
+      return withCors(json({ error: 'Bible service is not configured.', code: 'missing_api_key' }, 503, { 'Cache-Control': 'no-store' }), origin);
     }
 
     const { slug, bible } = resolved;
@@ -166,22 +195,30 @@ export default {
       const dataset = await buildDataset(env.API_BIBLE_KEY, slug, bible);
       const response = json(dataset, 200, {
         'Cache-Control': `public, max-age=${CACHE_TTL_SECONDS}`,
-        'CDN-Cache-Control': `public, max-age=${CACHE_TTL_SECONDS}`
+        'CDN-Cache-Control': `public, max-age=${CACHE_TTL_SECONDS}`,
+        'X-TMS-Worker-Build': WORKER_BUILD
       });
       ctx.waitUntil(cache.put(cacheKey, response.clone()));
-      console.log(JSON.stringify({ event: 'bible_dataset_refresh', version: slug, verses: dataset.verses.length }));
+      console.log(JSON.stringify({ event: 'bible_dataset_refresh', version: slug, verses: dataset.verses.length, build: WORKER_BUILD }));
       return withCors(response, origin);
     } catch (error) {
       const status = Number(error?.status || 0);
       const upstreamAuth = status === 401 || status === 403;
+      const rateLimited = status === 429;
       console.error(JSON.stringify({
         event: 'bible_proxy_error',
         version: slug,
-        reason: upstreamAuth ? 'upstream_auth' : 'upstream_failure',
+        reason: upstreamAuth ? 'upstream_auth' : rateLimited ? 'upstream_rate_limit' : 'upstream_failure',
         status: status || undefined,
-        message: String(error?.message || error).slice(0, 300)
+        message: String(error?.message || error).slice(0, 300),
+        build: WORKER_BUILD
       }));
-      return withCors(json({ error: upstreamAuth ? `${bible.short} authorization needs attention.` : `${bible.short} is temporarily unavailable.` }, 502, { 'Cache-Control': 'no-store' }), origin);
+      const message = upstreamAuth
+        ? `${bible.short} authorization needs attention.`
+        : rateLimited
+          ? `${bible.short} is temporarily rate-limited. Please try again shortly.`
+          : `${bible.short} is temporarily unavailable.`;
+      return withCors(json({ error: message, code: upstreamAuth ? 'upstream_auth' : rateLimited ? 'rate_limited' : 'upstream_failure' }, 502, { 'Cache-Control': 'no-store' }), origin);
     }
   }
 };
