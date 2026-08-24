@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "tms60-niv-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "secrets": {
+    "required": ["API_BIBLE_KEY"]
+  },
+  "vars": {
+    "ALLOWED_ORIGINS": "https://thiepn.github.io,https://thiepn.dev"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

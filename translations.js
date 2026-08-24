@@ -1,7 +1,7 @@
 /* TMS 60 translation adapter.
  * ESV remains bundled in app.html. Schlachter 1951 and Korean Revised Version
  * 1952/1961 are loaded from the GetBible v2 query API and cached locally.
- * NIV is loaded through API.Bible using a user-supplied API key with NIV access.
+ * NIV is loaded automatically through the TMS 60 server-side API.Bible proxy.
  */
 'use strict';
 (() => {
@@ -13,9 +13,8 @@
     }),
     niv: Object.freeze({
       id: 'niv', short: 'NIV', name: 'New International Version', language: 'English',
-      available: true, bundled: false, source: 'apiBible', bibleId: '78a9f6124f344018-01',
-      saveKey: 'tms60-niv-memory-lab-v1',
-      note: 'Loads the 60 TMS passages from API.Bible. Your API key is stored only in this browser and is never committed to the repository.'
+      available: true, bundled: false, source: 'proxy', saveKey: 'tms60-niv-memory-lab-v1',
+      note: 'Loads automatically through the TMS 60 server-side API.Bible integration. No user API key is required.'
     }),
     schlachter1951: Object.freeze({
       id: 'schlachter1951', short: 'SCH1951', name: 'Schlachter 1951', language: 'Deutsch',
@@ -40,23 +39,11 @@
     '3 John':64,'Jude':65,'Revelation':66
   });
 
-  const API_BIBLE_BOOK_IDS = Object.freeze({
-    'Genesis':'GEN','Exodus':'EXO','Leviticus':'LEV','Numbers':'NUM','Deuteronomy':'DEU','Joshua':'JOS','Judges':'JDG','Ruth':'RUT',
-    '1 Samuel':'1SA','2 Samuel':'2SA','1 Kings':'1KI','2 Kings':'2KI','1 Chronicles':'1CH','2 Chronicles':'2CH','Ezra':'EZR',
-    'Nehemiah':'NEH','Esther':'EST','Job':'JOB','Psalm':'PSA','Psalms':'PSA','Proverbs':'PRO','Ecclesiastes':'ECC',
-    'Song of Solomon':'SNG','Isaiah':'ISA','Jeremiah':'JER','Lamentations':'LAM','Ezekiel':'EZK','Daniel':'DAN','Hosea':'HOS',
-    'Joel':'JOL','Amos':'AMO','Obadiah':'OBA','Jonah':'JON','Micah':'MIC','Nahum':'NAM','Habakkuk':'HAB','Zephaniah':'ZEP',
-    'Haggai':'HAG','Zechariah':'ZEC','Malachi':'MAL','Matthew':'MAT','Mark':'MRK','Luke':'LUK','John':'JHN','Acts':'ACT',
-    'Romans':'ROM','1 Corinthians':'1CO','2 Corinthians':'2CO','Galatians':'GAL','Ephesians':'EPH','Philippians':'PHP',
-    'Colossians':'COL','1 Thessalonians':'1TH','2 Thessalonians':'2TH','1 Timothy':'1TI','2 Timothy':'2TI','Titus':'TIT',
-    'Philemon':'PHM','Hebrews':'HEB','James':'JAS','1 Peter':'1PE','2 Peter':'2PE','1 John':'1JN','2 John':'2JN',
-    '3 John':'3JN','Jude':'JUD','Revelation':'REV'
-  });
-
   const CACHE_SCHEMA = 2;
   const CACHE_PREFIX = 'tms60-translation-texts-v2-';
-  const API_BIBLE_KEY_STORAGE = 'tms60-api-bible-key-v1';
   const NIV_CACHE_MAX_AGE = 14 * 24 * 60 * 60 * 1000;
+  const LEGACY_API_BIBLE_KEY_STORAGE = 'tms60-api-bible-key-v1';
+  let nivServiceConfigPromise = null;
 
   function normalizeText(value) {
     return String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -78,78 +65,12 @@
     return { book, bookNumber, chapter, firstVerse, lastVerse };
   }
 
-  function apiBiblePassageId(reference) {
-    const ref = parseReference(reference);
-    const bookId = API_BIBLE_BOOK_IDS[ref.book];
-    if (!bookId) throw new Error(`API.Bible book mapping is missing for ${ref.book}.`);
-    const first = `${bookId}.${ref.chapter}.${ref.firstVerse}`;
-    const last = `${bookId}.${ref.chapter}.${ref.lastVerse}`;
-    return ref.firstVerse === ref.lastVerse ? first : `${first}-${last}`;
-  }
-
   function cacheKey(versionId) {
     return CACHE_PREFIX + versionId;
   }
 
-  function getApiBibleKey() {
-    try { return String(localStorage.getItem(API_BIBLE_KEY_STORAGE) || '').trim(); } catch (_) { return ''; }
-  }
-
-  function setApiBibleKey(value) {
-    const key = String(value || '').trim();
-    try {
-      if (key) localStorage.setItem(API_BIBLE_KEY_STORAGE, key);
-      else localStorage.removeItem(API_BIBLE_KEY_STORAGE);
-    } catch (_) {}
-    return key;
-  }
-
-  function clearApiBibleKey() {
-    setApiBibleKey('');
-  }
-
-  function requestApiBibleKey() {
-    const existing = getApiBibleKey();
-    if (existing) return Promise.resolve(existing);
-    return new Promise((resolve, reject) => {
-      const old = document.getElementById('tms60-api-key-dialog');
-      if (old) old.remove();
-
-      const root = document.createElement('div');
-      root.id = 'tms60-api-key-dialog';
-      root.style.cssText = 'position:fixed;inset:0;z-index:3000;display:grid;place-items:center;padding:20px;background:rgba(3,4,5,.78);backdrop-filter:blur(12px)';
-      root.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="tms60-api-key-title" style="width:min(560px,100%);border:1px solid rgba(255,255,255,.15);border-radius:18px;background:#121418;color:#f3f5f7;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.55);font:14px/1.5 Inter,system-ui,sans-serif">
-        <h2 id="tms60-api-key-title" style="margin:0 0 8px;font-size:20px">Connect NIV through API.Bible</h2>
-        <p style="margin:0 0 16px;color:#aeb5c0">NIV is available through API.Bible. Enter an API.Bible key that has access to the New International Version. The key is saved only in this browser and sent directly to API.Bible; it is not added to GitHub.</p>
-        <label style="display:grid;gap:7px;color:#d9dde3;font-weight:700">API.Bible key
-          <input id="tms60-api-key-input" type="password" autocomplete="off" spellcheck="false" style="width:100%;min-height:44px;border:1px solid #3a3f47;border-radius:10px;background:#090a0c;color:#fff;padding:10px 12px;font:inherit">
-        </label>
-        <p style="margin:10px 0 0;color:#8f97a2;font-size:12px">API.Bible recommends keeping API keys server-side. TMS 60 is currently a static GitHub Pages app, so this key remains local to your browser rather than being committed into public source code.</p>
-        <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:18px">
-          <button id="tms60-api-key-cancel" type="button" style="min-height:42px;border:1px solid #414750;border-radius:10px;background:#1d2025;color:#e8ebef;padding:8px 14px;font:inherit;font-weight:700">Cancel</button>
-          <button id="tms60-api-key-save" type="button" style="min-height:42px;border:1px solid #fff;border-radius:10px;background:#f3f5f7;color:#101216;padding:8px 14px;font:inherit;font-weight:800">Connect NIV</button>
-        </div>
-      </div>`;
-      document.body.appendChild(root);
-
-      const input = root.querySelector('#tms60-api-key-input');
-      const finish = value => {
-        root.remove();
-        if (value) resolve(value);
-        else reject(new Error('NIV API.Bible connection was cancelled.'));
-      };
-      root.querySelector('#tms60-api-key-save').addEventListener('click', () => {
-        const key = setApiBibleKey(input.value);
-        if (!key) { input.focus(); return; }
-        finish(key);
-      });
-      root.querySelector('#tms60-api-key-cancel').addEventListener('click', () => finish(''));
-      input.addEventListener('keydown', event => {
-        if (event.key === 'Enter') root.querySelector('#tms60-api-key-save').click();
-        if (event.key === 'Escape') finish('');
-      });
-      setTimeout(() => input.focus(), 0);
-    });
+  function clearLegacyApiBibleKey() {
+    try { localStorage.removeItem(LEGACY_API_BIBLE_KEY_STORAGE); } catch (_) {}
   }
 
   function readCachedTexts(def, baseVerses) {
@@ -158,7 +79,7 @@
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (parsed?.schema !== CACHE_SCHEMA || !Array.isArray(parsed.verses) || parsed.verses.length !== baseVerses.length) return null;
-      if (def.source === 'apiBible') {
+      if (def.id === 'niv') {
         const fetchedAt = Date.parse(parsed.fetchedAt || '');
         if (!Number.isFinite(fetchedAt) || Date.now() - fetchedAt > NIV_CACHE_MAX_AGE) return null;
       } else if (parsed?.api !== def.api) return null;
@@ -223,58 +144,65 @@
     return { verses: translated, copyright: '' };
   }
 
-  async function fetchApiBiblePassage(def, base, apiKey) {
-    const passageId = apiBiblePassageId(base.reference);
-    const params = new URLSearchParams({
-      'content-type': 'text',
-      'include-notes': 'false',
-      'include-titles': 'false',
-      'include-chapter-numbers': 'false',
-      'include-verse-numbers': 'false',
-      'include-verse-spans': 'false',
-      'use-org-id': 'true'
-    });
-    const endpoint = `https://rest.api.bible/v1/bibles/${encodeURIComponent(def.bibleId)}/passages/${encodeURIComponent(passageId)}?${params}`;
-    const response = await fetch(endpoint, { headers: { 'api-key': apiKey, 'Accept': 'application/json' } });
-    if (response.status === 401 || response.status === 403) {
-      clearApiBibleKey();
-      throw new Error('API.Bible rejected this key or the key does not have NIV access. Try NIV again with an API.Bible key licensed for the New International Version.');
+  async function getNivProxyBaseUrl() {
+    const injected = normalizeText(window.TMS_NIV_PROXY_URL || '');
+    if (injected) return validateProxyUrl(injected);
+    if (!nivServiceConfigPromise) {
+      nivServiceConfigPromise = fetch('niv-service.json', { cache: 'no-store', headers: { 'Accept': 'application/json' } })
+        .then(async response => {
+          if (!response.ok) throw new Error(`NIV service configuration returned HTTP ${response.status}.`);
+          return response.json();
+        })
+        .then(config => validateProxyUrl(normalizeText(config?.baseUrl || '')));
     }
-    if (!response.ok) throw new Error(`API.Bible returned HTTP ${response.status} for ${base.reference}.`);
-    const payload = await response.json();
-    const text = normalizeText(payload?.data?.content);
-    if (!text) throw new Error(`API.Bible returned no NIV text for ${base.reference}.`);
-    return { verse: { ...base, text }, copyright: normalizeText(payload?.data?.copyright || '') };
+    return nivServiceConfigPromise;
+  }
+
+  function validateProxyUrl(value) {
+    if (!value) throw new Error('NIV is not connected to the server-side service yet. The app owner must deploy the TMS 60 NIV Worker first.');
+    let url;
+    try { url = new URL(value, location.href); } catch (_) { throw new Error('The NIV service URL is invalid.'); }
+    const local = ['localhost', '127.0.0.1'].includes(url.hostname);
+    if (url.protocol !== 'https:' && !(local && url.protocol === 'http:')) throw new Error('The NIV service must use HTTPS.');
+    return url.href.replace(/\/+$/, '');
   }
 
   async function fetchNivVerses(def, baseVerses) {
     const cached = readCachedTexts(def, baseVerses);
     if (cached) return cached;
 
-    const apiKey = await requestApiBibleKey();
-    const results = new Array(baseVerses.length);
-    let copyright = '';
-    const concurrency = 5;
-    let cursor = 0;
-
-    async function worker() {
-      while (true) {
-        const index = cursor++;
-        if (index >= baseVerses.length) return;
-        const result = await fetchApiBiblePassage(def, baseVerses[index], apiKey);
-        results[index] = result.verse;
-        if (!copyright && result.copyright) copyright = result.copyright;
-      }
+    const baseUrl = await getNivProxyBaseUrl();
+    const response = await fetch(`${baseUrl}/v1/niv/tms60`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store'
+    });
+    if (!response.ok) {
+      let detail = '';
+      try { detail = normalizeText((await response.json())?.error || ''); } catch (_) {}
+      throw new Error(detail || `NIV service returned HTTP ${response.status}.`);
     }
+    const payload = await response.json();
+    if (!payload || !Array.isArray(payload.verses) || payload.verses.length !== 60) throw new Error('NIV service returned an incomplete TMS dataset.');
 
-    await Promise.all(Array.from({ length: concurrency }, worker));
-    if (results.length !== 60 || results.some(v => !v?.text)) throw new Error('Incomplete NIV TMS dataset.');
-    writeCachedTexts(def, results, copyright);
-    return { verses: results, copyright };
+    const seen = new Set();
+    const textById = new Map();
+    for (const item of payload.verses) {
+      const id = Number(item?.id), text = normalizeText(item?.text);
+      if (!Number.isInteger(id) || id < 1 || id > 60 || seen.has(id) || !text) throw new Error('NIV service returned an invalid TMS dataset.');
+      seen.add(id); textById.set(id, text);
+    }
+    if (seen.size !== 60) throw new Error('NIV service returned an incomplete TMS dataset.');
+
+    const translated = baseVerses.map(base => ({ ...base, text: textById.get(base.id) || '' }));
+    if (translated.some(v => !v.text)) throw new Error('NIV service is missing one or more TMS passages.');
+    const copyright = normalizeText(payload.copyright || '');
+    writeCachedTexts(def, translated, copyright);
+    return { verses: translated, copyright };
   }
 
   async function fetchTranslatedVerses(def, baseVerses) {
-    return def.source === 'apiBible' ? fetchNivVerses(def, baseVerses) : fetchGetBibleVerses(def, baseVerses);
+    return def.id === 'niv' ? fetchNivVerses(def, baseVerses) : fetchGetBibleVerses(def, baseVerses);
   }
 
   function extractBaseVerses(source) {
@@ -325,26 +253,26 @@
       const small = button.querySelector('small');
       if (small) {
         small.classList.remove('pending');
-        small.textContent = 'NIV · API.Bible';
+        small.textContent = 'NIV · automatic';
       }
     }
     const note = document.querySelector('.legal-note');
-    if (note && note.textContent.includes('NIV remains disabled')) {
-      note.textContent = note.textContent.replace(
-        'NIV remains disabled until an authorized Biblica text source is connected.',
-        'NIV loads through API.Bible and requires an API.Bible key with NIV access.'
-      );
+    if (note) {
+      note.textContent = note.textContent
+        .replace('NIV remains disabled until an authorized Biblica text source is connected.', 'NIV loads automatically through the TMS 60 server-side API.Bible integration.')
+        .replace('NIV loads through API.Bible and requires an API.Bible key with NIV access.', 'NIV loads automatically through the TMS 60 server-side API.Bible integration.');
     }
   }
 
+  clearLegacyApiBibleKey();
   window.TMSVersions = Object.freeze({
     definitions: VERSION_DEFS,
     list: () => Object.values(VERSION_DEFS),
     get: id => VERSION_DEFS[id] || VERSION_DEFS.esv,
     buildAppSource,
-    getApiBibleKey,
-    setApiBibleKey,
-    clearApiBibleKey,
+    getApiBibleKey: () => '',
+    setApiBibleKey: () => '',
+    clearApiBibleKey: clearLegacyApiBibleKey,
     clearTranslationCache(versionId) {
       try { localStorage.removeItem(cacheKey(versionId)); } catch (_) {}
     }

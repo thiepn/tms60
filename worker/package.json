@@ -1,0 +1,13 @@
+{
+  "name": "tms60-niv-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "check": "wrangler check",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.125.0"
+  }
+}
