@@ -1,14 +1,13 @@
 'use strict';
 (() => {
   const current = document.currentScript;
-  const BUILD = '20260824j';
+  const BUILD = '20260824k';
   const assetUrl = name => {
     const url = new URL(name, current?.src || location.href);
     url.searchParams.set('v', BUILD);
     return url.href;
   };
   const coreUrl = assetUrl('enhancements-core.js');
-  const safeLocalizationUrl = assetUrl('localization-safe.js');
   const topLevel = window.top === window;
   const FLAG = 'tms60-onboarding-v3';
   let needsUpgradeOnboarding = false;
@@ -24,15 +23,12 @@
       needsUpgradeOnboarding = localStorage.getItem(FLAG) !== '1';
       if (needsUpgradeOnboarding) localStorage.removeItem('tms60-onboarding-v2');
     } catch (_) {}
-
     const bindCompletion = () => {
       const onboarding = document.getElementById('onboarding');
       if (!onboarding) return;
       const markIfCompleted = () => {
         try {
-          if (onboarding.classList.contains('hidden') && localStorage.getItem('tms60-onboarding-v2') === '1') {
-            localStorage.setItem(FLAG, '1');
-          }
+          if (onboarding.classList.contains('hidden') && localStorage.getItem('tms60-onboarding-v2') === '1') localStorage.setItem(FLAG, '1');
         } catch (_) {}
       };
       new MutationObserver(markIfCompleted).observe(onboarding, { attributes: true, attributeFilter: ['class'] });
@@ -41,49 +37,37 @@
     else bindCompletion();
   }
 
+  function installInlineLocalization() {
+    if (topLevel || window.__TMS_INLINE_I18N__) return;
+    window.__TMS_INLINE_I18N__ = true;
+    const KEY='tms60-ui-language-v1';
+    const getLang=()=>{try{const x=localStorage.getItem(KEY);if(['en','de','ko'].includes(x))return x}catch(_){}const x=String(document.documentElement.lang||navigator.language||'en').toLowerCase();return x.startsWith('de')?'de':x.startsWith('ko')?'ko':'en'};
+    const books={'2 Corinthians':['2. Korinther','고린도후서'],'Galatians':['Galater','갈라디아서'],'Romans':['Römer','로마서'],'John':['Johannes','요한복음'],'2 Timothy':['2. Timotheus','디모데후서'],'Joshua':['Josua','여호수아'],'Philippians':['Philipper','빌립보서'],'Matthew':['Matthäus','마태복음'],'Hebrews':['Hebräer','히브리서'],'Isaiah':['Jesaja','이사야'],'1 Peter':['1. Petrus','베드로전서'],'Ephesians':['Epheser','에베소서'],'Titus':['Titus','디도서'],'Revelation':['Offenbarung','요한계시록'],'1 John':['1. Johannes','요한일서'],'1 Corinthians':['1. Korinther','고린도전서'],'Lamentations':['Klagelieder','예레미야애가'],'Numbers':['4. Mose','민수기'],'Psalm':['Psalm','시편'],'Luke':['Lukas','누가복음'],'Mark':['Markus','마가복음'],'Proverbs':['Sprüche','잠언'],'Acts':['Apostelgeschichte','사도행전'],'Leviticus':['3. Mose','레위기']};
+    const packs={'Living the New Life':['Das neue Leben leben','새 생명 안에서 살기'],'Proclaiming Christ':['Christus verkündigen','그리스도를 전파하기'],'Reliance on God’s Resources':['Aus Gottes Kraft leben','하나님의 자원을 의지하기'],"Reliance on God's Resources":['Aus Gottes Kraft leben','하나님의 자원을 의지하기'],'Being Christ’s Disciple':['Als Jünger Christi leben','그리스도의 제자로 살기'],"Being Christ's Disciple":['Als Jünger Christi leben','그리스도의 제자로 살기'],'Growth in Christlikeness':['Christus ähnlicher werden','그리스도를 닮아가기']};
+    const D={de:{
+      'See what you are learning now, what you can already recall, and what has become stable over time.':'Sieh, was du gerade lernst, was du bereits abrufen kannst und was langfristig stabil geworden ist.','Export history CSV':'Verlauf als CSV exportieren','Still moving through guided learning stages':'Noch in den geführten Lernstufen','Wording established; building long-term retention':'Wortlaut gefestigt; langfristige Behaltensleistung wird aufgebaut','21+ day interval and two spaced perfect proofs':'Mindestens 21 Tage Intervall und zwei zeitversetzte perfekte Nachweise','30-DAY EXACT':'30-TAGE-GENAUIGKEIT','PERFECT RECALLS':'FEHLERFREIE ABRUFE','Average unaided wording and book, chapter & verse score':'Durchschnittlicher unbeeinflusster Wortlaut- und Referenzwert','Share of recent unaided checks scored 100%':'Anteil der letzten unbeeinflussten Prüfungen mit 100 %','Each bar includes learning, maintaining, and stable verses.':'Jeder Balken enthält Verse in den Phasen Lernen, Wiederholen und Stabil.','means you have established the exact wording and the app is scheduling reviews to strengthen it.':'bedeutet, dass der exakte Wortlaut gefestigt ist und die App Wiederholungen zur weiteren Festigung plant.','means the wording has survived longer-term spacing: at least a 21-day interval and two perfect scheduled wording recalls separated by roughly a week. Stable is therefore a retention milestone—not the only progress that counts.':'bedeutet, dass der Wortlaut längere Abstände überstanden hat: mindestens ein 21-Tage-Intervall und zwei perfekte geplante Wortlautabrufe mit ungefähr einer Woche Abstand. Stabil ist damit ein Meilenstein der Behaltensleistung – nicht der einzige Fortschritt, der zählt.','Open any verse immediately. The scheduler recommends reviews, but it never controls what you are allowed to study.':'Öffne jeden Vers sofort. Der Planer empfiehlt Wiederholungen, bestimmt aber nie, was du lernen darfst.','Select a verse and a mode. You can move forward, repeat the same verse, or jump anywhere at any time.':'Wähle einen Vers und einen Lernmodus. Du kannst weitergehen, denselben Vers wiederholen oder jederzeit zu einem anderen Vers springen.','Choose “Recommended learning path” to continue this verse from its current stage, or select any practice mode directly.':'Wähle „Empfohlener Lernweg“, um diesen Vers an seiner aktuellen Stufe fortzusetzen, oder wähle direkt einen Übungsmodus.','Search verses':'Verse durchsuchen','Filter by pack':'Nach Paket filtern','Filter by status':'Nach Status filtern','Search book, chapter & verse or wording':'Buch, Kapitel, Vers oder Wortlaut suchen','No verses match these filters.':'Keine Verse entsprechen diesen Filtern.','Adjust workload, appearance, scheduling targets, and local backups.':'Passe Arbeitsumfang, Darstellung, Planungsziele und lokale Sicherungen an.','Daily task target':'Tägliches Aufgabenziel','Due work is never hidden merely because it exceeds this target.':'Fällige Aufgaben werden nie ausgeblendet, nur weil sie dieses Ziel überschreiten.','Target completion date':'Zieldatum','Target retention display':'Ziel-Behaltequote','Default missing-word level':'Standard-Lückentextstufe','Shuffle mature reviews':'Reife Wiederholungen mischen','Removes canonical-order cues.':'Entfernt Hinweise durch die kanonische Reihenfolge.','Streak grace days':'Kulanz-Tage für die Serie','Higher targets shorten mature review intervals; the scheduler remains deterministic and offline.':'Höhere Ziele verkürzen die Intervalle reifer Wiederholungen; der Planer bleibt deterministisch und offline.','Guided sessions remain available for recommendations, but the Study tab and Library always let you open any verse immediately.':'Geführte Einheiten bleiben als Empfehlung verfügbar, aber unter Lernen und in der Bibliothek kannst du jederzeit jeden Vers direkt öffnen.','Progress is stored in this browser. Export a JSON backup before clearing browser data or changing devices.':'Der Fortschritt wird in diesem Browser gespeichert. Exportiere eine JSON-Sicherung, bevor du Browserdaten löschst oder das Gerät wechselst.','Export progress':'Fortschritt exportieren','Import backup':'Sicherung importieren','Recover snapshot':'Schnappschuss wiederherstellen','Export review CSV':'Wiederholungen als CSV exportieren','Assisted learning never proves long-term mastery.':'Unterstütztes Lernen weist keine langfristige Beherrschung nach.','Wording and book, chapter & verse schedules are independent.':'Wortlaut- und Referenzpläne sind unabhängig voneinander.','Failed scheduled cards enter relearning.':'Fehlgeschlagene geplante Karten gehen in die Wiederlernphase.','Successful early extra practice cannot accelerate intervals.':'Erfolgreiche zusätzliche Frühübungen können Intervalle nicht beschleunigen.','Review history is retained for diagnostics.':'Der Wiederholungsverlauf wird für Diagnosen gespeichert.','Mon':'Mo','Tue':'Di','Wed':'Mi','Thu':'Do','Fri':'Fr','Sat':'Sa','Sun':'So','due':'fällig'
+    },ko:{
+      'See what you are learning now, what you can already recall, and what has become stable over time.':'현재 학습 중인 구절, 이미 암송할 수 있는 구절, 장기적으로 안정된 구절을 확인하세요.','Export history CSV':'기록 CSV 내보내기','Still moving through guided learning stages':'추천 학습 단계를 진행 중','Wording established; building long-term retention':'본문 암송 완료 · 장기 기억을 강화하는 중','21+ day interval and two spaced perfect proofs':'21일 이상 간격과 두 번의 완벽한 지연 확인','30-DAY EXACT':'30일 정확도','PERFECT RECALLS':'완벽 회상','Average unaided wording and book, chapter & verse score':'도움 없이 수행한 본문 및 장절 평균 점수','Share of recent unaided checks scored 100%':'최근 도움 없는 확인에서 100%를 기록한 비율','Each bar includes learning, maintaining, and stable verses.':'각 막대에는 학습 중, 복습 중, 안정된 구절이 함께 표시됩니다.','means you have established the exact wording and the app is scheduling reviews to strengthen it.':'은 정확한 본문을 암송했으며 앱이 기억을 강화하기 위한 복습 일정을 제공하는 상태입니다.','means the wording has survived longer-term spacing: at least a 21-day interval and two perfect scheduled wording recalls separated by roughly a week. Stable is therefore a retention milestone—not the only progress that counts.':'은 본문이 장기 간격 복습을 통과한 상태입니다. 최소 21일의 복습 간격과 약 일주일 이상 떨어진 두 번의 완벽한 예정 복습을 충족해야 합니다. 따라서 안정됨은 장기 기억의 한 기준이며 유일한 진행 기준은 아닙니다.','Open any verse immediately. The scheduler recommends reviews, but it never controls what you are allowed to study.':'원하는 구절을 즉시 열 수 있습니다. 복습 일정은 추천만 하며 학습할 수 있는 구절을 제한하지 않습니다.','Select a verse and a mode. You can move forward, repeat the same verse, or jump anywhere at any time.':'구절과 학습 방식을 선택하세요. 다음 구절로 넘어가거나 같은 구절을 반복하거나 언제든 원하는 구절로 이동할 수 있습니다.','Choose “Recommended learning path” to continue this verse from its current stage, or select any practice mode directly.':'“추천 학습 과정”을 선택하면 현재 단계부터 이어서 학습할 수 있으며 원하는 연습 방식을 직접 선택할 수도 있습니다.','Search verses':'구절 검색','Filter by pack':'묶음별 필터','Filter by status':'상태별 필터','Search book, chapter & verse or wording':'성경 책, 장·절 또는 본문 검색','No verses match these filters.':'조건에 맞는 구절이 없습니다.','Adjust workload, appearance, scheduling targets, and local backups.':'학습량, 화면 설정, 일정 목표, 로컬 백업을 조정하세요.','Daily task target':'하루 학습 목표','Due work is never hidden merely because it exceeds this target.':'복습할 항목이 목표 수를 넘더라도 숨겨지지 않습니다.','Target completion date':'목표 완료 날짜','Target retention display':'목표 기억 유지율','Default missing-word level':'기본 빈칸 비율','Shuffle mature reviews':'숙달 구절 복습 순서 섞기','Removes canonical-order cues.':'정해진 순서로 인한 힌트를 제거합니다.','Streak grace days':'연속 학습 유예일','Higher targets shorten mature review intervals; the scheduler remains deterministic and offline.':'목표 유지율이 높을수록 숙달 구절의 복습 간격이 짧아집니다. 일정 계산은 오프라인에서 동일한 기준으로 이루어집니다.','Guided sessions remain available for recommendations, but the Study tab and Library always let you open any verse immediately.':'추천 학습은 계속 사용할 수 있지만 학습 탭과 전체 구절에서는 언제든 원하는 구절을 바로 열 수 있습니다.','Progress is stored in this browser. Export a JSON backup before clearing browser data or changing devices.':'진행 상황은 이 브라우저에 저장됩니다. 브라우저 데이터를 삭제하거나 기기를 바꾸기 전에 JSON 백업을 내보내세요.','Export progress':'진행 상황 내보내기','Import backup':'백업 가져오기','Recover snapshot':'자동 백업 복원','Export review CSV':'복습 CSV 내보내기','Assisted learning never proves long-term mastery.':'도움이 있는 학습은 장기 숙달의 증거로 인정되지 않습니다.','Wording and book, chapter & verse schedules are independent.':'본문 복습과 장절 복습 일정은 서로 독립적입니다.','Failed scheduled cards enter relearning.':'예정된 복습에 실패하면 다시 학습 단계로 들어갑니다.','Successful early extra practice cannot accelerate intervals.':'예정보다 이른 추가 연습에 성공해도 복습 간격은 빨라지지 않습니다.','Review history is retained for diagnostics.':'복습 기록은 학습 상태 분석을 위해 보관됩니다.','Mon':'월','Tue':'화','Wed':'수','Thu':'목','Fri':'금','Sat':'토','Sun':'일','due':'복습'
+    }};
+    function ref(s,l){if(l==='en')return s;let out=String(s);for(const [en,n] of Object.entries(books).sort((a,b)=>b[0].length-a[0].length)){const esc=en.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');out=out.replace(new RegExp('(^|\\b)'+esc+'(?=\\s+\\d+:\\d)','g'),(_,p)=>p+n[l==='de'?0:1])}return out}
+    function tr(raw,l){const s=String(raw??'');if(l==='en'||!s.trim())return s;const a=s.match(/^\s*/)?.[0]||'',z=s.match(/\s*$/)?.[0]||'',c=s.slice(a.length,s.length-z.length);if(Object.hasOwn(D[l],c))return a+D[l][c]+z;let m;if((m=c.match(/^(\d+)\.\s+(.+\d+:\d+(?:-\d+)?)$/)))return a+m[1]+'. '+ref(m[2],l)+z;const rr=ref(c,l);if(rr!==c)return a+rr+z;if((m=c.match(/^Pack ([A-E])\s*[·:]\s*(.+)$/))){const p=packs[m[2]];return a+(l==='de'?'Paket ':'묶음 ')+m[1]+' · '+(p?p[l==='de'?0:1]:m[2])+z}if((m=c.match(/^(\d+) verses?$/)))return a+(l==='de'?m[1]+' '+(+m[1]===1?'Vers':'Verse'):m[1]+'구절')+z;if((m=c.match(/^Oral self-checks:\s*(\d+)\/(\d+) passed$/)))return a+(l==='de'?`Mündliche Selbstkontrollen: ${m[1]}/${m[2]} bestanden`:`구두 자가 점검: ${m[1]}/${m[2]} 통과`)+z;if((m=c.match(/^([0-9]+) learning · ([0-9]+) maintaining · ([0-9]+) stable$/)))return a+(l==='de'?`${m[1]} Lernen · ${m[2]} Wiederholen · ${m[3]} stabil`:`학습 중 ${m[1]} · 복습 중 ${m[2]} · 안정됨 ${m[3]}`)+z;if((m=c.match(/^([0-9]+) wording · ([0-9]+) book, chapter & verse$/)))return a+(l==='de'?`${m[1]} Wortlaut · ${m[2]} Referenz`:`본문 ${m[1]} · 장절 ${m[2]}`)+z;if((m=c.match(/^Recover snapshot \(([0-9]+)\)$/)))return a+(l==='de'?`Schnappschuss wiederherstellen (${m[1]})`:`자동 백업 복원 (${m[1]})`)+z;if((m=c.match(/^Schema ([0-9]+) · ([0-9]+) review events · Last saved (.+)$/)))return a+(l==='de'?`Schema ${m[1]} · ${m[2]} Wiederholungsereignisse · Zuletzt gespeichert ${m[3]}`:`스키마 ${m[1]} · 복습 기록 ${m[2]}개 · 마지막 저장 ${m[3]}`)+z;if((m=c.match(/^([0-9]+)% hidden$/)))return a+(l==='de'?`${m[1]} % ausgeblendet`:`${m[1]}% 가림`)+z;return s}
+    function run(){const l=getLang();if(l==='en')return;const roots=[document.querySelector('.sidebar'),document.querySelector('.topbar'),document.querySelector('.mobile-nav'),document.querySelector('.view.active'),document.getElementById('modal-root'),document.getElementById('toasts')];for(const root of roots){if(!root)continue;const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let n;while((n=w.nextNode())){const p=n.parentElement;if(!p||p.closest('script,style,#translation-copyright,.verse-text,.quote-mini,.diff,.char-text,.initials-prompt,.cloze-line'))continue;const x=tr(n.nodeValue,l);if(x!==n.nodeValue)n.nodeValue=x}root.querySelectorAll?.('[placeholder],[aria-label],[title]').forEach(el=>{for(const k of ['placeholder','aria-label','title'])if(el.hasAttribute(k)){const v=el.getAttribute(k),x=tr(v,l);if(x!==v)el.setAttribute(k,x)}})}document.documentElement.dataset.tmsInlineI18n='loaded'}
+    let q=false;const schedule=()=>{if(q)return;q=true;requestAnimationFrame(()=>{q=false;run()})};
+    for(const name of ['renderHome','renderStudy','renderLibrary','renderProgress','renderSettings','renderAll','switchView']){const fn=window[name];if(typeof fn==='function'&&!fn.__tmsInline){const wrapped=function(...args){const r=fn.apply(this,args);schedule();return r};wrapped.__tmsInline=true;window[name]=wrapped}}
+    document.addEventListener('click',()=>setTimeout(schedule,0));document.addEventListener('change',()=>setTimeout(schedule,0));document.addEventListener('keydown',()=>setTimeout(schedule,0));run();
+  }
+
   const script = document.createElement('script');
   script.src = coreUrl;
   script.dataset.tmsVnextCore = '1';
   script.async = false;
   script.onload = () => {
-    if (!topLevel) {
-      try {
-        const htmlLang = String(document.documentElement.lang || '').toLowerCase().split('-')[0];
-        if (['en','de','ko'].includes(htmlLang)) localStorage.setItem('tms60-ui-language-v1', htmlLang);
-      } catch (_) {}
-
-      fetch(safeLocalizationUrl, { cache: 'no-store' })
-        .then(response => {
-          if (!response.ok) throw new Error(`Localization asset returned HTTP ${response.status}.`);
-          return response.text();
-        })
-        .then(code => {
-          document.querySelectorAll('script[data-tms-safe-i18n]').forEach(node => node.remove());
-          const i18n = document.createElement('script');
-          i18n.textContent = `${code}\n//# sourceURL=${safeLocalizationUrl}`;
-          i18n.dataset.tmsSafeI18n = '1';
-          document.head.appendChild(i18n);
-          document.documentElement.dataset.tmsSafeI18n = window.__TMS_SAFE_I18N__ ? 'loaded' : 'not-initialized';
-          window.dispatchEvent(new Event('tms-safe-i18n-ready'));
-        })
-        .catch(error => {
-          document.documentElement.dataset.tmsSafeI18n = 'error';
-          console.error('TMS 60 localization completion layer failed to initialize.', error);
-        });
-    }
-
+    if (!topLevel) installInlineLocalization();
     if (!topLevel || !needsUpgradeOnboarding) return;
     const frame = document.getElementById('app-frame');
-    const show = () => {
-      if (frame && !frame.classList.contains('ready')) return false;
-      if (typeof window.openOnboarding !== 'function') return false;
-      window.openOnboarding();
-      return true;
-    };
+    const show = () => { if (frame && !frame.classList.contains('ready')) return false; if (typeof window.openOnboarding !== 'function') return false; window.openOnboarding(); return true; };
     if (show() || !frame) return;
-    const observer = new MutationObserver(() => {
-      if (show()) observer.disconnect();
-    });
+    const observer = new MutationObserver(() => { if (show()) observer.disconnect(); });
     observer.observe(frame, { attributes: true, attributeFilter: ['class'] });
   };
   script.onerror = () => console.error('TMS 60 experience layer failed to load.');
