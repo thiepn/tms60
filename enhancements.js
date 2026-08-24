@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const current = document.currentScript;
-  const BUILD = '20260824q';
+  const BUILD = '20260824p';
   const assetUrl = name => {
     const url = new URL(name, current?.src || location.href);
     url.searchParams.set('v', BUILD);
@@ -9,6 +9,7 @@
   };
   const coreUrl = assetUrl('enhancements-core.js');
   const runtimeUrl = assetUrl('localization-runtime.js');
+  const completionUrl = assetUrl('localization-completion.js');
   const topLevel = window.top === window;
   const FLAG = 'tms60-onboarding-v3';
   let needsUpgradeOnboarding = false;
@@ -41,20 +42,29 @@
     else bindCompletion();
   }
 
+  function loadLocalizationCompletion() {
+    if (!topLevel || document.querySelector('script[data-tms-localization-completion]')) return;
+    const completion = document.createElement('script');
+    completion.src = completionUrl;
+    completion.dataset.tmsLocalizationCompletion = '1';
+    completion.async = false;
+    completion.onerror = () => console.error('TMS 60 localization completion layer failed to load.');
+    document.head.appendChild(completion);
+  }
+
   function loadLocalizationRuntime() {
     if (!topLevel || document.querySelector('script[data-tms-localization-runtime]')) return;
     const runtime = document.createElement('script');
     runtime.src = runtimeUrl;
     runtime.dataset.tmsLocalizationRuntime = '1';
     runtime.async = false;
+    runtime.onload = loadLocalizationCompletion;
     runtime.onerror = () => console.error('TMS 60 localization runtime failed to load.');
     document.head.appendChild(runtime);
   }
 
   const NativeMutationObserver = window.MutationObserver;
   if (!topLevel && NativeMutationObserver) {
-    // Disable the legacy whole-app i18n observer while the core initializes.
-    // The parent runtime handles incremental localization without full rescans.
     window.MutationObserver = class {
       observe() {}
       disconnect() {}

@@ -1,6 +1,6 @@
 'use strict';
-const CACHE='tms60-vnext-2026-08-24q';
-const CORE=['./','./index.html','./app.html','./translations.js','./niv-service.json','./enhancements.js','./enhancements-core.js','./localization-runtime.js','./favicon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
+const CACHE='tms60-vnext-2026-08-24p';
+const CORE=['./','./index.html','./app.html','./translations.js','./niv-service.json','./enhancements.js','./enhancements-core.js','./localization-runtime.js','./localization-completion.js','./favicon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
 self.addEventListener('install',event=>{
   event.waitUntil((async()=>{
     const cache=await caches.open(CACHE);
