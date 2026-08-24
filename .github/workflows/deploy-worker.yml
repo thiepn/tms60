@@ -37,4 +37,41 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-# Deployment retriggered after Cloudflare repository secrets were configured.
+      - name: Verify live Worker
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const base = 'https://tms60-niv-api.thiepn.workers.dev';
+          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+          async function getJson(path, attempts = 4) {
+            let last;
+            for (let i = 1; i <= attempts; i++) {
+              const response = await fetch(base + path, { headers: { Accept: 'application/json' } });
+              let body = null;
+              try { body = await response.json(); } catch (_) {}
+              if (response.ok) return body;
+              last = new Error(`${path} -> HTTP ${response.status}: ${body?.error || 'unknown error'}`);
+              if (i < attempts) await sleep(1500 * i);
+            }
+            throw last;
+          }
+
+          const health = await getJson('/health');
+          if (!health?.ok) throw new Error('Worker health check did not return ok=true.');
+          if (!health?.apiKeyConfigured) throw new Error('Worker health says API_BIBLE_KEY is not configured.');
+          if (health?.build !== '2026-08-25-multibible-4-free-safe') {
+            throw new Error(`Unexpected Worker build: ${health?.build}`);
+          }
+          console.log(`health ok: ${health.build}`);
+
+          for (const slug of ['niv', 'nlt', 'hfa', 'klb1985']) {
+            const data = await getJson(`/v1/bibles/${slug}/tms60`, 3);
+            if (data?.version !== slug) throw new Error(`${slug}: wrong version marker ${data?.version}`);
+            if (!Array.isArray(data?.verses) || data.verses.length !== 60) {
+              throw new Error(`${slug}: expected 60 verses, got ${data?.verses?.length ?? 'none'}`);
+            }
+            if (data.verses.some(v => !v?.text)) throw new Error(`${slug}: one or more verses are empty.`);
+            console.log(`${slug} ok: ${data.verses.length} verses`);
+          }
+          NODE
