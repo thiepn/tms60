@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_CLOZE_HELPERS_QOL__) return;
-  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.2.0';
+  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.3.0';
 
   const style = document.createElement('style');
   style.id = 'tms60-cloze-helper-style';
@@ -46,6 +46,15 @@
     setTimeout(move,260);
   };
 
+  const focusClozeInput = input => {
+    if (!input) return false;
+    input.focus({preventScroll:true});
+    try { input.select(); } catch (_) {}
+    input.scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});
+    positionMobileInput(input);
+    return true;
+  };
+
   const updateCounter = () => {
     const line = document.querySelector('.cloze-line');
     const inputs = clozeInputs();
@@ -88,13 +97,25 @@
       if (active?.matches?.('.cloze-input:not(:disabled)') && !firstEmpty) return;
       if (active?.matches?.('.cloze-input:not(:disabled)') && !String(active.value || '').trim()) return;
 
-      target.focus({preventScroll:true});
-      try { target.select(); } catch (_) {}
-      target.scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});
+      focusClozeInput(target);
       updateCounter();
-      positionMobileInput(target);
     }, 70);
   };
+
+  document.addEventListener('keydown',event=>{
+    const input = event.target?.closest?.('.cloze-input:not(:disabled)');
+    if (!input || event.altKey || event.shiftKey || !(event.ctrlKey || event.metaKey)) return;
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    const inputs = clozeInputs();
+    const index = inputs.indexOf(input);
+    if (index < 0) return;
+    const targetIndex = event.key === 'ArrowLeft' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= inputs.length) return;
+    event.preventDefault();
+    event.stopPropagation();
+    focusClozeInput(inputs[targetIndex]);
+    updateCounter();
+  },true);
 
   document.addEventListener('focusin',event=>{
     if (event.target?.matches?.('.cloze-input:not(:disabled)')) {
