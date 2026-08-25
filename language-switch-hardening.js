@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_LANGUAGE_SWITCH_HARDENING__) return;
-  window.__TMS60_LANGUAGE_SWITCH_HARDENING__ = '1.6.0';
+  window.__TMS60_LANGUAGE_SWITCH_HARDENING__ = '1.7.0';
 
   const KEY = 'tms60-ui-language-v1';
   const SUPPORTED = new Set(['en', 'de', 'ko']);
@@ -70,21 +70,20 @@
     } catch (_) {}
   }
 
-  function installIdempotentSettingsNavigation() {
-    if (window.__TMS60_IDEMPOTENT_SETTINGS_NAV__ || typeof switchView !== 'function') return;
+  function installIdempotentActiveNavigation() {
+    if (window.__TMS60_IDEMPOTENT_ACTIVE_NAV__ || typeof switchView !== 'function') return;
     const coreSwitchView = switchView;
-    window.__TMS60_IDEMPOTENT_SETTINGS_NAV__ = '1.0.0';
+    window.__TMS60_IDEMPOTENT_ACTIVE_NAV__ = '1.0.0';
     switchView = function(view) {
       const current = document.documentElement.dataset.view;
-      const activeSettings = view === 'settings' &&
-        current === 'settings' &&
-        document.getElementById('view-settings')?.classList.contains('active');
+      const activeView = current === view &&
+        document.getElementById(`view-${view}`)?.classList.contains('active');
 
-      if (activeSettings) {
-        // Re-entering an already active Settings view used to replace the entire
-        // settings subtree. That unnecessarily destroyed the parent-injected
-        // language/Bible cards and started a recreate/reparent/localize cycle.
-        // Keep the existing localized subtree intact instead.
+      if (activeView) {
+        // Re-entering an already active view only replaces DOM that is already
+        // current. In localized views that redundant replacement forced parent
+        // localization layers to translate/recreate the same subtree again.
+        // Preserve the current subtree; real view changes still use core logic.
         try {
           const drawerWasOpen = document.getElementById('sidebar')?.classList.contains('open');
           if (typeof setSidebarOpen === 'function') setSidebarOpen(false, drawerWasOpen);
@@ -135,7 +134,7 @@
     }, 120);
   }, true);
 
-  installIdempotentSettingsNavigation();
+  installIdempotentActiveNavigation();
   syncSelectors();
   const observer = new MutationObserver(() => queueMicrotask(syncSelectors));
   observer.observe(document.body, { childList: true, subtree: true });
