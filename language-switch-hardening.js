@@ -1,22 +1,24 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_LANGUAGE_SWITCH_HARDENING__) return;
-  window.__TMS60_LANGUAGE_SWITCH_HARDENING__ = '1.1.0';
+  window.__TMS60_LANGUAGE_SWITCH_HARDENING__ = '1.2.0';
 
   const KEY = 'tms60-ui-language-v1';
+  const VERSION_KEY = 'tms60-active-translation-v1';
   const SUPPORTED = new Set(['en', 'de', 'ko']);
-  let reloadScheduled = false;
+  let rebuildScheduled = false;
 
-  function settingsStorage() {
+  function topStorage() {
     try {
       if (window.top && window.top !== window && window.top.localStorage) return window.top.localStorage;
     } catch (_) {}
-    return localStorage;
+    return null;
   }
 
   function storedLanguage() {
     try {
-      const value = settingsStorage().getItem(KEY);
+      const store = topStorage();
+      const value = store ? store.getItem(KEY) : null;
       return SUPPORTED.has(value) ? value : 'en';
     } catch (_) {
       return 'en';
@@ -25,11 +27,20 @@
 
   function saveLanguage(value) {
     try {
-      settingsStorage().setItem(KEY, value);
+      const store = topStorage();
+      if (!store) return false;
+      store.setItem(KEY, value);
       return true;
     } catch (_) {
       return false;
     }
+  }
+
+  function syncSelectors() {
+    const lang = storedLanguage();
+    document.querySelectorAll('#ui-language-select').forEach(select => {
+      if (select instanceof HTMLSelectElement && select.value !== lang) select.value = lang;
+    });
   }
 
   function activeStudySession() {
@@ -48,16 +59,26 @@
     } catch (_) {}
   }
 
-  function reloadShell() {
-    if (reloadScheduled) return;
-    reloadScheduled = true;
-    setTimeout(() => {
+  function rebuildApp() {
+    if (rebuildScheduled) return;
+    rebuildScheduled = true;
+    setTimeout(async () => {
       try {
-        window.top.location.reload();
+        const topWindow = window.top;
+        const store = topStorage();
+        const fallbackVersion = store?.getItem(VERSION_KEY) || 'esv';
+        const version = typeof topWindow.readActiveVersion === 'function'
+          ? topWindow.readActiveVersion()
+          : fallbackVersion;
+        if (typeof topWindow.loadVersion === 'function') {
+          await topWindow.loadVersion(version);
+          return;
+        }
+        topWindow.location.reload();
       } catch (_) {
-        try { location.reload(); } catch (_) {}
+        try { window.top.location.reload(); } catch (_) {}
       }
-    }, 50);
+    }, 40);
   }
 
   window.addEventListener('change', event => {
@@ -68,7 +89,10 @@
     if (!SUPPORTED.has(next)) return;
 
     const previous = storedLanguage();
-    if (next === previous) return;
+    if (next === previous) {
+      syncSelectors();
+      return;
+    }
 
     // Capture at window level so legacy document/target language handlers never
     // enter the unstable in-place multi-layer localization path.
@@ -87,6 +111,10 @@
     }
 
     document.documentElement.lang = next;
-    reloadShell();
+    rebuildApp();
   }, true);
+
+  syncSelectors();
+  const observer = new MutationObserver(() => queueMicrotask(syncSelectors));
+  observer.observe(document.body, { childList: true, subtree: true });
 })();
