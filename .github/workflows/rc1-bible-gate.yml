@@ -3,6 +3,17 @@ on:
   push:
     branches: [main]
     paths:
+      - 'index.html'
+      - 'app.html'
+      - 'translations.js'
+      - 'enhancements.js'
+      - 'enhancements-legacy.js'
+      - 'enhancements-core.js'
+      - 'rc3-hardening.js'
+      - 'guided-learning-chain.js'
+      - 'localization-runtime.js'
+      - 'localization-completion.js'
+      - 'worker/**'
       - 'tests/rc1-bible-gate.mjs'
       - '.github/workflows/rc1-bible-gate.yml'
   workflow_dispatch:
