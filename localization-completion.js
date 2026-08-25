@@ -136,7 +136,8 @@
       const next = select.value;
       if (!SUPPORTED.has(next)) return;
       try { localStorage.setItem(KEY, next); } catch (_) {}
-      location.reload();
+      schedule();
+      requestAnimationFrame(() => run());
     });
   }
 
