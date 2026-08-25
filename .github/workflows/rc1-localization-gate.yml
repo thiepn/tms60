@@ -1,0 +1,20 @@
+name: RC1 Localization Gate
+on:
+  push:
+    branches: [main]
+    paths: ['tests/rc1-localization-gate.mjs','.github/workflows/rc1-localization-gate.yml']
+  workflow_dispatch:
+permissions:{contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - run: sleep 12
+      - run: node tests/rc1-localization-gate.mjs
