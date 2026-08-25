@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const current=document.currentScript;
-  const BUILD='20260825-stability10';
+  const BUILD='20260825-stability11';
   const assetUrl=name=>{const u=new URL(name,current?.src||location.href);u.searchParams.set('v',BUILD);return u.href};
   const topLevel=window.top===window;
   const UI_LANGUAGE_KEY='tms60-ui-language-v1';
@@ -20,6 +20,28 @@
     proto.setItem=function(key,value){
       if(this===window.localStorage&&key===UI_LANGUAGE_KEY)return;
       return nativeSetItem.call(this,key,value);
+    };
+  }
+
+  function installLocalizationNavigationIsolation(doc){
+    if(!topLevel||!doc||doc.__TMS60_LOCALIZATION_NAV_ISOLATION__)return;
+    const nativeAdd=doc.addEventListener.bind(doc);
+    const sourceOf=listener=>{try{return Function.prototype.toString.call(listener).replace(/\s+/g,' ')}catch(_){return''}};
+    Object.defineProperty(doc,'__TMS60_LOCALIZATION_NAV_ISOLATION__',{value:'1.0.0',configurable:true});
+    doc.addEventListener=function(type,listener,options){
+      if(type==='click'&&typeof listener==='function'){
+        const src=sourceOf(listener);
+        const runtimeFullPass=src.includes('translateDocument');
+        const completionFullPass=src.includes('scheduled = true')&&src.includes('setTimeout(run, 0)');
+        if(runtimeFullPass||completionFullPass){
+          const wrapped=function(event){
+            if(event?.target?.closest?.('[data-view]'))return;
+            return listener.call(this,event);
+          };
+          return nativeAdd(type,wrapped,options);
+        }
+      }
+      return nativeAdd(type,listener,options);
     };
   }
 
@@ -59,6 +81,7 @@
     if(!frame)return;
     const doc=frame.contentDocument;
     if(!doc||!frame.classList.contains('ready'))return;
+    installLocalizationNavigationIsolation(doc);
     if(appCoreReady(doc)){injectAppLayersNow(doc);return;}
     if(attempt<160){
       setTimeout(()=>{
@@ -81,9 +104,16 @@
     const bindFrame=()=>{
       const frame=document.getElementById('app-frame');
       if(!frame)return;
-      frame.addEventListener('load',()=>setTimeout(()=>injectCurrentFrame(),0));
+      installLocalizationNavigationIsolation(frame.contentDocument);
+      frame.addEventListener('load',()=>{
+        installLocalizationNavigationIsolation(frame.contentDocument);
+        setTimeout(()=>injectCurrentFrame(),0);
+      });
       new MutationObserver(()=>{
-        if(frame.classList.contains('ready'))injectCurrentFrame();
+        if(frame.classList.contains('ready')){
+          installLocalizationNavigationIsolation(frame.contentDocument);
+          injectCurrentFrame();
+        }
       }).observe(frame,{attributes:true,attributeFilter:['class']});
       injectCurrentFrame();
     };
