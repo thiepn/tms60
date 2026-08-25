@@ -1,8 +1,7 @@
 'use strict';
 (() => {
-  // Full stabilization audit trigger: 2026-08-25. No runtime behavior change.
   const current=document.currentScript;
-  const BUILD='20260825-stability2';
+  const BUILD='20260825-stability3';
   const assetUrl=name=>{const u=new URL(name,current?.src||location.href);u.searchParams.set('v',BUILD);return u.href};
   const topLevel=window.top===window;
 
@@ -20,9 +19,13 @@
     return Boolean(w &&
       typeof w.completeCurrent==='function' &&
       typeof w.isWordingStable==='function' &&
+      typeof w.renderHome==='function' &&
       typeof w.renderStudy==='function' &&
+      typeof w.renderAll==='function' &&
       typeof w.learningTask==='function' &&
-      typeof w.startSession==='function');
+      typeof w.startVerseLearning==='function' &&
+      typeof w.startSession==='function' &&
+      typeof w.normalizeReference==='function');
   }
   function injectAppLayersNow(doc){
     injectScript(doc,'rc3-hardening.js','data-tms-rc3-hardening','TMS60 RC3 hardening failed to load.');
@@ -38,7 +41,7 @@
     const doc=frame.contentDocument;
     if(!doc||!frame.classList.contains('ready'))return;
     if(appCoreReady(doc)){injectAppLayersNow(doc);return;}
-    if(attempt<120){
+    if(attempt<160){
       setTimeout(()=>{
         const liveFrame=document.getElementById('app-frame');
         if(liveFrame===frame && liveFrame.contentDocument===doc && liveFrame.classList.contains('ready')) injectCurrentFrame(attempt+1);
@@ -51,7 +54,7 @@
   function injectDirectDocument(doc,attempt=0){
     if(!doc)return;
     if(appCoreReady(doc)){injectAppLayersNow(doc);return;}
-    if(attempt<160)setTimeout(()=>injectDirectDocument(doc,attempt+1),25);
+    if(attempt<200)setTimeout(()=>injectDirectDocument(doc,attempt+1),25);
     else console.error('TMS60 enhancement layers were not injected because the app core did not become ready.');
   }
 
