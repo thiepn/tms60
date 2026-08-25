@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const current=document.currentScript;
-  const BUILD='20260825-qol-bundle1';
+  const BUILD='20260825-qol-bundle2';
   const assetUrl=name=>{const u=new URL(name,current?.src||location.href);u.searchParams.set('v',BUILD);return u.href};
   const topLevel=window.top===window;
 
