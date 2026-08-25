@@ -1,7 +1,6 @@
 import { chromium } from 'playwright';
 
 const APP='https://thiepn.github.io/tms60/';
-const SAVE='tms60-esv-memory-lab-v1';
 const out={passes:[],failures:[]};
 function test(ok,name,detail=''){
   (ok?out.passes:out.failures).push({name,detail});
@@ -12,8 +11,8 @@ function seed(){
   localStorage.setItem('tms60-onboarding-v3','1');
   localStorage.setItem('tms60-ui-language-v1','en');
   localStorage.setItem('tms60-active-translation-v1','esv');
-  localStorage.removeItem(SAVE);
-  localStorage.removeItem(SAVE+'-snapshots');
+  localStorage.removeItem('tms60-esv-memory-lab-v1');
+  localStorage.removeItem('tms60-esv-memory-lab-v1-snapshots');
 }
 async function frameOf(page,timeout=60000){
   await page.waitForSelector('#app-frame.ready',{timeout});
@@ -47,6 +46,7 @@ try{
   await page.addInitScript(seed);
   await page.goto(APP,{waitUntil:'domcontentloaded',timeout:45000});
   const frame=await waitForFix(page);
+  errors.length=0;
 
   const result=await frame.evaluate(async()=>{
     state.settings.dailyGoal=1;
