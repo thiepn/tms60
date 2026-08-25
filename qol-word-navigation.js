@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_WORD_NAV_QOL__) return;
-  window.__TMS60_WORD_NAV_QOL__ = '1.2.0';
+  window.__TMS60_WORD_NAV_QOL__ = '1.3.0';
 
   const style = document.createElement('style');
   style.id = 'tms60-word-nav-qol-style';
@@ -31,6 +31,14 @@
   };
 
   const clozeInputs = () => [...document.querySelectorAll('.cloze-input:not(:disabled)')].filter(isVisibleEnabled);
+
+  const syncClozeKeyboardHints = () => {
+    const inputs = clozeInputs();
+    inputs.forEach((input,index) => {
+      input.setAttribute('enterkeyhint', index === inputs.length - 1 ? 'done' : 'next');
+      input.setAttribute('inputmode','text');
+    });
+  };
 
   const nextFocusableAfter = input => {
     const scope = input.closest('.study-card') || document.querySelector('#view-study') || document;
@@ -74,7 +82,7 @@
 
     const mobile = isMobileInputMode();
     const advance = mobile
-      ? (event.key === ' ' || event.code === 'Space')
+      ? (event.key === ' ' || event.code === 'Space' || event.key === 'Enter')
       : (event.key === 'Tab' && !event.shiftKey);
     if (!advance) return;
 
@@ -127,6 +135,13 @@
 
   document.addEventListener('focusin', event => {
     const input = event.target?.closest?.('.cloze-input:not(:disabled)');
-    if (input) input.classList.add('qol-word-target');
+    if (input) {
+      syncClozeKeyboardHints();
+      input.classList.add('qol-word-target');
+    }
   }, true);
+
+  const observer = new MutationObserver(syncClozeKeyboardHints);
+  observer.observe(document.body,{childList:true,subtree:true});
+  syncClozeKeyboardHints();
 })();
