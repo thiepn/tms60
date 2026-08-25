@@ -1,15 +1,22 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_LANGUAGE_SWITCH_HARDENING__) return;
-  window.__TMS60_LANGUAGE_SWITCH_HARDENING__ = '1.0.0';
+  window.__TMS60_LANGUAGE_SWITCH_HARDENING__ = '1.1.0';
 
   const KEY = 'tms60-ui-language-v1';
   const SUPPORTED = new Set(['en', 'de', 'ko']);
   let reloadScheduled = false;
 
+  function settingsStorage() {
+    try {
+      if (window.top && window.top !== window && window.top.localStorage) return window.top.localStorage;
+    } catch (_) {}
+    return localStorage;
+  }
+
   function storedLanguage() {
     try {
-      const value = localStorage.getItem(KEY);
+      const value = settingsStorage().getItem(KEY);
       return SUPPORTED.has(value) ? value : 'en';
     } catch (_) {
       return 'en';
@@ -18,7 +25,7 @@
 
   function saveLanguage(value) {
     try {
-      localStorage.setItem(KEY, value);
+      settingsStorage().setItem(KEY, value);
       return true;
     } catch (_) {
       return false;
