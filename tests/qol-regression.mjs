@@ -33,7 +33,7 @@ async function waitForQoL(page,timeout=150000){
         fast:window.__TMS60_FAST_RECALL_QOL__||'',
         cloze:window.__TMS60_CLOZE_HELPERS_QOL__||''
       }));
-      if(versions.word==='1.4.0'&&versions.fast==='1.5.0'&&versions.cloze==='1.5.0')return frame;
+      if(versions.word&&versions.fast&&versions.cloze)return frame;
     }catch{}
     await page.waitForTimeout(4000);
     await page.reload({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{});
