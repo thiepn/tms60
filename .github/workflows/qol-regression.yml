@@ -8,7 +8,7 @@ on:
       - 'qol-cloze-helpers.js'
       - 'enhancements.js'
       - 'sw.js'
-      - 'tests/qol-regression.mjs'
+      - 'tests/qol-regression-v2.mjs'
       - '.github/workflows/qol-regression.yml'
   workflow_dispatch:
 permissions:
@@ -26,4 +26,4 @@ jobs:
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
       - run: sleep 25
-      - run: node tests/qol-regression.mjs
+      - run: node tests/qol-regression-v2.mjs
