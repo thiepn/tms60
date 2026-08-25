@@ -49,6 +49,7 @@
         '#view-settings .settings-grid>#ui-language-settings-card{grid-column:1!important;grid-row:1!important;min-width:0;margin:0}',
         '#view-settings .settings-grid>[data-shell-version-settings]{grid-column:2!important;grid-row:1!important;min-width:0;margin:0}',
         '#view-settings .settings-grid>#ui-language-settings-card select,#view-settings .settings-grid>[data-shell-version-settings] select{width:100%;min-width:0}',
+        '@media(max-width:900px){#view-settings .settings-grid>#ui-language-settings-card,#view-settings .settings-grid>[data-shell-version-settings]{grid-column:1/-1!important;grid-row:auto!important;width:100%;min-width:0}}',
         '@media(max-width:560px){#view-settings .settings-grid>#ui-language-settings-card,#view-settings .settings-grid>[data-shell-version-settings]{padding:14px}#view-settings .settings-grid>#ui-language-settings-card h2,#view-settings .settings-grid>[data-shell-version-settings] h2{font-size:1rem}}'
       ].join('');
       doc.head.appendChild(style);
