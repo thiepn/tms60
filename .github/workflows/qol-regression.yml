@@ -1,0 +1,29 @@
+name: TMS60 QoL Regression
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'qol-word-navigation.js'
+      - 'qol-fast-recall.js'
+      - 'qol-cloze-helpers.js'
+      - 'enhancements.js'
+      - 'sw.js'
+      - 'tests/qol-regression.mjs'
+      - '.github/workflows/qol-regression.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - run: sleep 25
+      - run: node tests/qol-regression.mjs
