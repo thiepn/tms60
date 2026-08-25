@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_CLOZE_HELPERS_QOL__) return;
-  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.4.0';
+  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.5.0';
 
   const EMPTY_GUARD_KEY = 'tms60-qol-empty-advance-guard-v1';
 
@@ -13,6 +13,8 @@
       margin:0 auto 8px;max-width:820px;color:var(--muted);
       font-size:.78rem;font-weight:720;letter-spacing:.02em;
     }
+    .cloze-input.qol-locked-correct{opacity:.62;background:var(--successSoft);border-color:color-mix(in srgb,var(--success) 35%,var(--border))}
+    [data-qol-fix-cloze]{margin-left:6px}
   `;
   document.head.appendChild(style);
 
@@ -27,11 +29,13 @@
     try { const value=localStorage.getItem(EMPTY_GUARD_KEY); return value == null ? true : value !== '0'; }
     catch (_) { return true; }
   };
+  const normalizeWord = value => String(value || '').toLocaleLowerCase('en-US').replace(/[’]/g,"'").trim();
 
   let lastPointerAt = 0;
   document.addEventListener('pointerdown',()=>{lastPointerAt=performance.now();},true);
 
   const clozeInputs = () => [...document.querySelectorAll('.cloze-input:not(:disabled)')].filter(visibleEnabled);
+  const allClozeInputs = () => [...document.querySelectorAll('.cloze-input')].filter(el=>el.getClientRects().length>0);
 
   const positionMobileInput = input => {
     if (!input || !mobileMode()) return;
@@ -61,6 +65,47 @@
     return true;
   };
 
+  const errorIndicesFromDom = () => allClozeInputs()
+    .filter(input => normalizeWord(input.value) !== normalizeWord(input.dataset.expected))
+    .map(input => Number(input.dataset.ci))
+    .filter(Number.isInteger);
+
+  const applyFixOnlyMode = () => {
+    if (typeof session !== 'object' || session?.exercise?.checked) return;
+    const errors = Array.isArray(session?.exercise?.qolErrorIndices) ? session.exercise.qolErrorIndices : [];
+    if (!errors.length) return;
+    const allowed = new Set(errors.map(Number));
+    for (const input of allClozeInputs()) {
+      const editable = allowed.has(Number(input.dataset.ci));
+      input.disabled = !editable;
+      input.classList.toggle('qol-locked-correct',!editable);
+    }
+    const first = clozeInputs()[0];
+    if (first) setTimeout(()=>focusClozeInput(first),35);
+  };
+
+  const injectFixErrorsButton = () => {
+    if (typeof currentTask === 'function' && currentTask()?.mode !== 'cloze') return;
+    const checked = typeof session === 'object' && session?.exercise?.checked;
+    const actions = document.querySelector('.cloze-line')?.parentElement?.querySelector('.answer-actions');
+    if (!checked || !actions) return;
+    const errors = errorIndicesFromDom();
+    if (!errors.length) {
+      if (session?.exercise) delete session.exercise.qolErrorIndices;
+      actions.querySelector('[data-qol-fix-cloze]')?.remove();
+      return;
+    }
+    let button = actions.querySelector('[data-qol-fix-cloze]');
+    if (!button) {
+      button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn';
+      button.setAttribute('data-qol-fix-cloze','1');
+      actions.appendChild(button);
+    }
+    button.textContent = `Fix ${errors.length} error${errors.length===1?'':'s'}`;
+  };
+
   const updateCounter = () => {
     const line = document.querySelector('.cloze-line');
     const inputs = clozeInputs();
@@ -82,7 +127,8 @@
       const firstEmpty = inputs.findIndex(input => !String(input.value || '').trim());
       index = firstEmpty >= 0 ? firstEmpty : inputs.length - 1;
     }
-    counter.textContent = `${index + 1} / ${inputs.length} words`;
+    const correcting = Array.isArray(session?.exercise?.qolErrorIndices) && session.exercise.qolErrorIndices.length > 0;
+    counter.textContent = correcting ? `${index + 1} / ${inputs.length} errors` : `${index + 1} / ${inputs.length} words`;
   };
 
   const injectSettingsToggle = () => {
@@ -97,10 +143,12 @@
   };
 
   let timer = 0;
-  const focusFirstUnfinished = () => {
+  const refreshClozeHelpers = () => {
     clearTimeout(timer);
     timer = setTimeout(() => {
+      applyFixOnlyMode();
       updateCounter();
+      injectFixErrorsButton();
       injectSettingsToggle();
       if (performance.now() - lastPointerAt < 220) return;
       const inputs = clozeInputs();
@@ -119,6 +167,20 @@
       updateCounter();
     }, 70);
   };
+
+  document.addEventListener('click',event=>{
+    const button = event.target?.closest?.('[data-qol-fix-cloze]');
+    if (!button || typeof session !== 'object' || !session?.exercise) return;
+    const inputs = allClozeInputs();
+    const errors = errorIndicesFromDom();
+    if (!errors.length) return;
+    session.exercise.clozeAnswers = inputs.map(input=>String(input.value || ''));
+    session.exercise.qolErrorIndices = errors;
+    session.exercise.checked = false;
+    session.exercise.result = null;
+    if (typeof renderStudy === 'function') renderStudy();
+    setTimeout(()=>{applyFixOnlyMode();updateCounter();},40);
+  },true);
 
   document.addEventListener('keydown',event=>{
     const input = event.target?.closest?.('.cloze-input:not(:disabled)');
@@ -154,8 +216,8 @@
     const root = document.getElementById('view-study');
     if (root && root.dataset.qolClozeResumeObserved !== '1') {
       root.dataset.qolClozeResumeObserved = '1';
-      new MutationObserver(focusFirstUnfinished).observe(root,{childList:true,subtree:true});
-      focusFirstUnfinished();
+      new MutationObserver(refreshClozeHelpers).observe(root,{childList:true,subtree:true});
+      refreshClozeHelpers();
     }
     injectSettingsToggle();
   };
