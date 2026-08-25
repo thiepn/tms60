@@ -1,8 +1,7 @@
 'use strict';
-// Final certification baseline — no runtime behavior change.
 (() => {
   const current=document.currentScript;
-  const BUILD='20260825-stability3';
+  const BUILD='20260825-stability4';
   const assetUrl=name=>{const u=new URL(name,current?.src||location.href);u.searchParams.set('v',BUILD);return u.href};
   const topLevel=window.top===window;
 
@@ -30,6 +29,7 @@
   }
   function injectAppLayersNow(doc){
     injectScript(doc,'rc3-hardening.js','data-tms-rc3-hardening','TMS60 RC3 hardening failed to load.');
+    injectScript(doc,'language-switch-hardening.js','data-tms-language-switch-hardening','TMS60 language-switch hardening failed to load.');
     injectScript(doc,'guided-learning-chain.js','data-tms-guided-chain-fix','TMS60 guided-learning chain fix failed to load.');
     injectScript(doc,'qol-fast-recall.js','data-tms-fast-recall-qol','TMS60 fast-recall QoL failed to load.');
     injectScript(doc,'qol-cloze-helpers.js','data-tms-cloze-helpers-qol','TMS60 cloze-helper QoL failed to load.');
