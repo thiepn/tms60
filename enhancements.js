@@ -1,9 +1,22 @@
 'use strict';
 (() => {
   const current=document.currentScript;
-  const BUILD='20260825-stability4';
+  const BUILD='20260825-stability5';
   const assetUrl=name=>{const u=new URL(name,current?.src||location.href);u.searchParams.set('v',BUILD);return u.href};
   const topLevel=window.top===window;
+  const UI_LANGUAGE_KEY='tms60-ui-language-v1';
+
+  function installIframeLocalizationGuard(){
+    if(topLevel||window.__TMS60_IFRAME_LOCALIZATION_GUARD__)return;
+    const proto=window.Storage?.prototype;
+    const nativeGetItem=proto?.getItem;
+    if(typeof nativeGetItem!=='function')return;
+    window.__TMS60_IFRAME_LOCALIZATION_GUARD__='1.0.0';
+    proto.getItem=function(key){
+      if(this===window.localStorage&&key===UI_LANGUAGE_KEY)return 'en';
+      return nativeGetItem.call(this,key);
+    };
+  }
 
   function injectScript(doc,name,flag,errorMessage){
     if(!doc||doc.querySelector(`script[${flag}]`))return;
@@ -70,6 +83,11 @@
       injectCurrentFrame();
     };
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bindFrame,{once:true});else bindFrame();
+  } else {
+    // Keep the legacy iframe experience layer in canonical English mode. The
+    // parent localization runtime/completion layer is the single owner of DE/KO
+    // translation, avoiding duplicate full-document localization during boot.
+    installIframeLocalizationGuard();
   }
 
   const legacy=document.createElement('script');
