@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const current=document.currentScript;
-  const BUILD='20260825-stability6';
+  const BUILD='20260825-stability7';
   const assetUrl=name=>{const u=new URL(name,current?.src||location.href);u.searchParams.set('v',BUILD);return u.href};
   const topLevel=window.top===window;
   const UI_LANGUAGE_KEY='tms60-ui-language-v1';
@@ -10,11 +10,16 @@
     if(topLevel||window.__TMS60_IFRAME_LOCALIZATION_GUARD__)return;
     const proto=window.Storage?.prototype;
     const nativeGetItem=proto?.getItem;
-    if(typeof nativeGetItem!=='function')return;
-    window.__TMS60_IFRAME_LOCALIZATION_GUARD__='1.0.0';
+    const nativeSetItem=proto?.setItem;
+    if(typeof nativeGetItem!=='function'||typeof nativeSetItem!=='function')return;
+    window.__TMS60_IFRAME_LOCALIZATION_GUARD__='1.1.0';
     proto.getItem=function(key){
       if(this===window.localStorage&&key===UI_LANGUAGE_KEY)return 'en';
       return nativeGetItem.call(this,key);
+    };
+    proto.setItem=function(key,value){
+      if(this===window.localStorage&&key===UI_LANGUAGE_KEY)return;
+      return nativeSetItem.call(this,key,value);
     };
   }
 
@@ -84,9 +89,9 @@
     };
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bindFrame,{once:true});else bindFrame();
   } else {
-    // Keep the legacy iframe experience layer in canonical English mode. The
-    // parent localization runtime/completion layer is the single owner of DE/KO
-    // translation, avoiding duplicate full-document localization during boot.
+    // Keep the legacy iframe experience layer in canonical English mode while
+    // preventing it from overwriting the parent-owned UI language preference.
+    // The parent localization runtime/completion layer is the single DE/KO owner.
     installIframeLocalizationGuard();
   }
 
