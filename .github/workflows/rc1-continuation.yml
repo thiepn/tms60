@@ -20,10 +20,12 @@ on:
       - 'manifest.webmanifest'
       - 'worker/**'
       - 'tests/rc1-production-audit-continuation.mjs'
+      - 'tests/wait-for-pages-deployment.mjs'
       - '.github/workflows/rc1-continuation.yml'
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
   audit:
     runs-on: ubuntu-latest
@@ -36,5 +38,8 @@ jobs:
       - run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
-      - run: sleep 15
+      - name: Wait for exact GitHub Pages deployment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tests/wait-for-pages-deployment.mjs
       - run: node tests/rc1-production-audit-continuation.mjs
