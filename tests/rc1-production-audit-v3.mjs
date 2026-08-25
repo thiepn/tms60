@@ -10,8 +10,8 @@ const overlap=(a,b)=>!(a.x+a.width<=b.x||b.x+b.width<=a.x||a.y+a.height<=b.y||b.
 function seed({lang='en',version='esv'}={}){
   localStorage.setItem('tms60-onboarding-v2','1');
   localStorage.setItem('tms60-onboarding-v3','1');
-  localStorage.setItem(LANG,lang);
-  localStorage.setItem(VER,version);
+  localStorage.setItem('tms60-ui-language-v1',lang);
+  localStorage.setItem('tms60-active-translation-v1',version);
   localStorage.setItem('tms60-global-theme-v1',JSON.stringify({appearance:'light',accent:'neutral'}));
 }
 async function frameOf(page,timeout=45000){
