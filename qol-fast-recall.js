@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_FAST_RECALL_QOL__) return;
-  window.__TMS60_FAST_RECALL_QOL__ = '1.1.0';
+  window.__TMS60_FAST_RECALL_QOL__ = '1.2.0';
 
   const visibleEnabled = el => {
     if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
@@ -25,6 +25,49 @@
   const isEditable = el => !!el && (
     el.matches?.('input:not(:disabled),textarea:not(:disabled),select:not(:disabled),[contenteditable="true"]')
   );
+
+  const bestStudyTarget = () => {
+    const selectors = [
+      '.rate-btn:not(:disabled)',
+      '#typing-answer:not(:disabled)',
+      '#initials-answer:not(:disabled)',
+      '#reference-answer:not(:disabled)',
+      '.cloze-input:not(:disabled)',
+      '[data-action="reveal"]:not(:disabled)',
+      '[data-action="next-phrase"]:not(:disabled)',
+      '.learn-check:not(:disabled)',
+      '[data-action="speak"]:not(:disabled)',
+      '[data-action="complete-listen"]:not(:disabled)',
+      '[data-action="flashcard-next"]:not(:disabled)',
+      '.session-complete .btn.primary:not(:disabled)',
+      '#view-study .btn.primary:not(:disabled)'
+    ];
+    for (const selector of selectors) {
+      const candidates = [...document.querySelectorAll(selector)].filter(visibleEnabled);
+      if (!candidates.length) continue;
+      if (selector.startsWith('.cloze-input')) {
+        return candidates.find(input => !String(input.value || '').trim()) || candidates[0];
+      }
+      return candidates[0];
+    }
+    return null;
+  };
+
+  let focusTimer = 0;
+  const scheduleStudyFocus = () => {
+    clearTimeout(focusTimer);
+    focusTimer = setTimeout(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== document.documentElement && document.contains(active) && visibleEnabled(active)) return;
+      const target = bestStudyTarget();
+      if (!target) return;
+      target.focus({preventScroll:true});
+      if (target.matches?.('input,textarea') && typeof target.select === 'function') {
+        try { target.select(); } catch (_) {}
+      }
+      target.scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});
+    }, 35);
+  };
 
   document.addEventListener('keydown', event => {
     if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
@@ -55,4 +98,13 @@
     event.stopImmediatePropagation();
     clickAction(selector);
   }, true);
+
+  const bindStudyObserver = () => {
+    const root = document.getElementById('view-study');
+    if (!root || root.dataset.qolFocusObserved === '1') return;
+    root.dataset.qolFocusObserved = '1';
+    new MutationObserver(scheduleStudyFocus).observe(root,{childList:true,subtree:true});
+  };
+  bindStudyObserver();
+  new MutationObserver(bindStudyObserver).observe(document.body,{childList:true,subtree:true});
 })();
