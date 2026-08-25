@@ -1,5 +1,6 @@
 'use strict';
 (() => {
+  // Full stabilization audit trigger: 2026-08-25. No runtime behavior change.
   const current=document.currentScript;
   const BUILD='20260825-stability2';
   const assetUrl=name=>{const u=new URL(name,current?.src||location.href);u.searchParams.set('v',BUILD);return u.href};
