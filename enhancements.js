@@ -1,5 +1,5 @@
 'use strict';
-// Unified final certification trigger — no runtime behavior change.
+// Final certification baseline — no runtime behavior change.
 (() => {
   const current=document.currentScript;
   const BUILD='20260825-stability3';
