@@ -20,7 +20,7 @@ on:
       - 'sw.js'
       - 'manifest.webmanifest'
       - 'worker/**'
-      - 'tests/rc1-production-audit-v2.mjs'
+      - 'tests/rc1-production-audit-v3.mjs'
       - '.github/workflows/rc1-production-audit.yml'
   workflow_dispatch:
 
@@ -49,4 +49,4 @@ jobs:
         run: sleep 20
 
       - name: Run RC1 production audit
-        run: node tests/rc1-production-audit-v2.mjs
+        run: node tests/rc1-production-audit-v3.mjs
