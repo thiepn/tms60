@@ -1,0 +1,24 @@
+name: RC1 Continuation Gates
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tests/rc1-production-audit-continuation.mjs'
+      - '.github/workflows/rc1-continuation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - run: sleep 15
+      - run: node tests/rc1-production-audit-continuation.mjs
