@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_LANGUAGE_SWITCH_HARDENING__) return;
-  window.__TMS60_LANGUAGE_SWITCH_HARDENING__ = '1.4.0';
+  window.__TMS60_LANGUAGE_SWITCH_HARDENING__ = '1.5.0';
 
   const KEY = 'tms60-ui-language-v1';
   const SUPPORTED = new Set(['en', 'de', 'ko']);
@@ -57,14 +57,15 @@
     } catch (_) {}
   }
 
-  function suppressLegacyLanguageRenderForCurrentEvent() {
-    const original = window.renderAll;
-    if (typeof original !== 'function') return;
-    const suppressed = () => {};
-    window.renderAll = suppressed;
-    queueMicrotask(() => {
-      if (window.renderAll === suppressed) window.renderAll = original;
-    });
+  function requestParentLocalization() {
+    // Both parent localization layers already listen for document clicks in this
+    // iframe. Dispatching a target-only synthetic click wakes those parent-owned
+    // translators without invoking the legacy language-change handler or
+    // rebuilding the iframe. The target is Document, so normal button/action
+    // delegation has nothing actionable to match.
+    try {
+      document.dispatchEvent(new Event('click', { bubbles: false, cancelable: false }));
+    } catch (_) {}
   }
 
   window.addEventListener('change', event => {
@@ -75,35 +76,33 @@
     if (!SUPPORTED.has(next)) return;
 
     const previous = storedLanguage();
-    if (next === previous) {
-      queueMicrotask(syncSelectors);
-      return;
-    }
+
+    // App-language changes are parent-owned. Consume the original change during
+    // capture so the legacy iframe listener never receives it.
+    event.preventDefault();
+    event.stopImmediatePropagation();
 
     if (activeStudySession()) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
       select.value = previous;
       notifyActiveSession();
       return;
     }
 
-    if (!saveLanguage(next)) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
+    if (next !== previous && !saveLanguage(next)) {
       select.value = previous;
       return;
     }
 
-    // The legacy iframe language listener still receives this event, but its
-    // renderAll() call is suppressed for this one synchronous dispatch. That
-    // prevents the old iframe localizer from rebuilding/localizing the complete
-    // app while the parent localization runtime handles DE/KO. The parent-side
-    // capture/completion listeners still receive the same change event normally.
-    suppressLegacyLanguageRenderForCurrentEvent();
     document.documentElement.lang = next;
-    queueMicrotask(syncSelectors);
-    setTimeout(syncSelectors, 120);
+    syncSelectors();
+    queueMicrotask(() => {
+      requestParentLocalization();
+      syncSelectors();
+    });
+    setTimeout(() => {
+      requestParentLocalization();
+      syncSelectors();
+    }, 120);
   }, true);
 
   syncSelectors();
