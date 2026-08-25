@@ -1,7 +1,9 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_WORD_NAV_QOL__) return;
-  window.__TMS60_WORD_NAV_QOL__ = '1.3.0';
+  window.__TMS60_WORD_NAV_QOL__ = '1.4.0';
+
+  const EMPTY_GUARD_KEY = 'tms60-qol-empty-advance-guard-v1';
 
   const style = document.createElement('style');
   style.id = 'tms60-word-nav-qol-style';
@@ -15,8 +17,22 @@
       outline-offset:3px;
       box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 16%,transparent),var(--shadow)!important;
     }
+    .cloze-input.qol-empty-blocked{
+      animation:qol-empty-pulse .24s ease 0s 2 alternate;
+      border-color:var(--warn)!important;
+      box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 20%,transparent)!important;
+    }
+    @keyframes qol-empty-pulse{from{transform:scale(1)}to{transform:scale(1.035)}}
+    @media(prefers-reduced-motion:reduce){.cloze-input.qol-empty-blocked{animation:none}}
   `;
   document.head.appendChild(style);
+
+  const readEmptyGuard = () => {
+    try {
+      const value = localStorage.getItem(EMPTY_GUARD_KEY);
+      return value == null ? true : value !== '0';
+    } catch (_) { return true; }
+  };
 
   const isVisibleEnabled = el => {
     if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
@@ -64,6 +80,14 @@
     return true;
   };
 
+  const blockEmptyAdvance = input => {
+    input.classList.remove('qol-empty-blocked');
+    void input.offsetWidth;
+    input.classList.add('qol-empty-blocked');
+    setTimeout(()=>input.classList.remove('qol-empty-blocked'),650);
+    focusTarget(input,false);
+  };
+
   document.addEventListener('keydown', event => {
     if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
     const input = event.target?.closest?.('.cloze-input:not(:disabled)');
@@ -85,6 +109,13 @@
       ? (event.key === ' ' || event.code === 'Space' || event.key === 'Enter')
       : (event.key === 'Tab' && !event.shiftKey);
     if (!advance) return;
+
+    if (readEmptyGuard() && !String(input.value || '').trim()) {
+      event.preventDefault();
+      event.stopPropagation();
+      blockEmptyAdvance(input);
+      return;
+    }
 
     event.preventDefault();
     event.stopPropagation();
