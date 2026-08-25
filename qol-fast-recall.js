@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_FAST_RECALL_QOL__) return;
-  window.__TMS60_FAST_RECALL_QOL__ = '1.3.0';
+  window.__TMS60_FAST_RECALL_QOL__ = '1.4.0';
 
   const style = document.createElement('style');
   style.id = 'tms60-fast-recall-style';
@@ -100,8 +100,26 @@
     }, 35);
   };
 
+  const repeatVerseButton = () => {
+    const complete = [...document.querySelectorAll('.session-complete')].find(visibleEnabled);
+    if (!complete) return null;
+    const buttons = [...complete.querySelectorAll('button:not(:disabled)')].filter(visibleEnabled);
+    return buttons.find(button => /repeat|same verse/i.test(button.textContent || '')) || null;
+  };
+
   document.addEventListener('keydown', event => {
     if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
+
+    if ((event.key === 'r' || event.key === 'R') && !isEditable(document.activeElement)) {
+      const repeat = repeatVerseButton();
+      if (repeat) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        repeat.focus({preventScroll:true});
+        repeat.click();
+        return;
+      }
+    }
 
     if (/^[1-4]$/.test(event.key) && !isEditable(document.activeElement)) {
       const rating = Number(event.key) - 1;
