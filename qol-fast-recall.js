@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_FAST_RECALL_QOL__) return;
-  window.__TMS60_FAST_RECALL_QOL__ = '1.5.0';
+  window.__TMS60_FAST_RECALL_QOL__ = '1.5.1';
 
   const style = document.createElement('style');
   style.id = 'tms60-fast-recall-style';
@@ -85,6 +85,7 @@
     const current = Math.min(total, session.index + 1);
     let reference = '';
     try { reference = typeof currentVerse === 'function' ? (currentVerse()?.reference || '') : ''; } catch (_) {}
+    const signature = `${current}|${total}|${reference}`;
     if (!strip) {
       strip = document.createElement('div');
       strip.id = 'qol-session-strip';
@@ -93,6 +94,8 @@
       strip.setAttribute('aria-live','polite');
       root.prepend(strip);
     }
+    if (strip.dataset.signature === signature) return;
+    strip.dataset.signature = signature;
     strip.innerHTML = `<strong>Task ${current} of ${total}</strong><div class="qol-session-track" aria-hidden="true"><div class="qol-session-fill" style="width:${Math.round(100*current/total)}%"></div></div><span class="qol-session-ref">${reference}</span>`;
   };
 
