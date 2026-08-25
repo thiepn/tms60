@@ -3,6 +3,21 @@ on:
   push:
     branches: [main]
     paths:
+      - 'index.html'
+      - 'app.html'
+      - 'translations.js'
+      - 'enhancements.js'
+      - 'enhancements-legacy.js'
+      - 'enhancements-core.js'
+      - 'rc3-hardening.js'
+      - 'guided-learning-chain.js'
+      - 'qol-fast-recall.js'
+      - 'qol-cloze-helpers.js'
+      - 'qol-word-navigation.js'
+      - 'localization-runtime.js'
+      - 'localization-completion.js'
+      - 'sw.js'
+      - 'manifest.webmanifest'
       - 'tests/rc1-device-pwa-gate.mjs'
       - '.github/workflows/rc1-device-pwa-gate.yml'
   workflow_dispatch:
