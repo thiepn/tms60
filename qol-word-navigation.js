@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_WORD_NAV_QOL__) return;
-  window.__TMS60_WORD_NAV_QOL__ = '1.1.0';
+  window.__TMS60_WORD_NAV_QOL__ = '1.2.0';
 
   const style = document.createElement('style');
   style.id = 'tms60-word-nav-qol-style';
@@ -88,6 +88,41 @@
 
     const action = nextFocusableAfter(input);
     if (action) focusTarget(action, true);
+  }, true);
+
+  document.addEventListener('paste', event => {
+    const input = event.target?.closest?.('.cloze-input:not(:disabled)');
+    if (!input) return;
+    const text = event.clipboardData?.getData('text') || '';
+    const words = text.match(/[\p{L}\p{N}]+(?:[’'][\p{L}\p{N}]+)*/gu) || [];
+    if (words.length <= 1) return;
+
+    const inputs = clozeInputs();
+    const start = inputs.indexOf(input);
+    if (start < 0) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const available = inputs.length - start;
+    const count = Math.min(words.length, available);
+    for (let offset = 0; offset < count; offset++) {
+      const target = inputs[start + offset];
+      target.value = words[offset];
+      target.dispatchEvent(new Event('input', {bubbles:true}));
+      target.dispatchEvent(new Event('change', {bubbles:true}));
+    }
+
+    const nextIndex = start + count;
+    if (nextIndex < inputs.length) focusTarget(inputs[nextIndex], false);
+    else {
+      const action = nextFocusableAfter(inputs[inputs.length - 1]);
+      if (action) focusTarget(action, true);
+    }
+
+    if (words.length > available && typeof toast === 'function') {
+      toast(`${available} pasted words fit the remaining blanks; ${words.length - available} extra word${words.length - available === 1 ? '' : 's'} were not inserted.`);
+    }
   }, true);
 
   document.addEventListener('focusin', event => {
