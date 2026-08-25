@@ -11,10 +11,12 @@ on:
       - 'sw.js'
       - 'tests/qol-regression-v2.mjs'
       - 'tests/guided-due-regression.mjs'
+      - 'tests/wait-for-pages-deployment.mjs'
       - '.github/workflows/qol-regression.yml'
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
   qol:
     runs-on: ubuntu-latest
@@ -27,6 +29,9 @@ jobs:
       - run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
-      - run: sleep 25
+      - name: Wait for exact GitHub Pages deployment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tests/wait-for-pages-deployment.mjs
       - run: node tests/qol-regression-v2.mjs
       - run: node tests/guided-due-regression.mjs
