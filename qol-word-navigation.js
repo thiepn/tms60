@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_WORD_NAV_QOL__) return;
-  window.__TMS60_WORD_NAV_QOL__ = '1.0.0';
+  window.__TMS60_WORD_NAV_QOL__ = '1.1.0';
 
   const style = document.createElement('style');
   style.id = 'tms60-word-nav-qol-style';
@@ -61,15 +61,22 @@
     const input = event.target?.closest?.('.cloze-input:not(:disabled)');
     if (!input) return;
 
+    const inputs = clozeInputs();
+    const index = inputs.indexOf(input);
+    if (index < 0) return;
+
+    if (event.key === 'Backspace' && input.value.length === 0 && index > 0) {
+      event.preventDefault();
+      event.stopPropagation();
+      focusTarget(inputs[index - 1], false);
+      return;
+    }
+
     const mobile = isMobileInputMode();
     const advance = mobile
       ? (event.key === ' ' || event.code === 'Space')
       : (event.key === 'Tab' && !event.shiftKey);
     if (!advance) return;
-
-    const inputs = clozeInputs();
-    const index = inputs.indexOf(input);
-    if (index < 0) return;
 
     event.preventDefault();
     event.stopPropagation();
