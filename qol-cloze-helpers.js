@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_CLOZE_HELPERS_QOL__) return;
-  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.5.0';
+  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.5.1';
 
   const EMPTY_GUARD_KEY = 'tms60-qol-empty-advance-guard-v1';
 
@@ -103,7 +103,8 @@
       button.setAttribute('data-qol-fix-cloze','1');
       actions.appendChild(button);
     }
-    button.textContent = `Fix ${errors.length} error${errors.length===1?'':'s'}`;
+    const label = `Fix ${errors.length} error${errors.length===1?'':'s'}`;
+    if (button.textContent !== label) button.textContent = label;
   };
 
   const updateCounter = () => {
@@ -128,7 +129,8 @@
       index = firstEmpty >= 0 ? firstEmpty : inputs.length - 1;
     }
     const correcting = Array.isArray(session?.exercise?.qolErrorIndices) && session.exercise.qolErrorIndices.length > 0;
-    counter.textContent = correcting ? `${index + 1} / ${inputs.length} errors` : `${index + 1} / ${inputs.length} words`;
+    const text = correcting ? `${index + 1} / ${inputs.length} errors` : `${index + 1} / ${inputs.length} words`;
+    if (counter.textContent !== text) counter.textContent = text;
   };
 
   const injectSettingsToggle = () => {
