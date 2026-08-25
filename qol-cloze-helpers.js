@@ -1,7 +1,9 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_CLOZE_HELPERS_QOL__) return;
-  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.3.0';
+  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.4.0';
+
+  const EMPTY_GUARD_KEY = 'tms60-qol-empty-advance-guard-v1';
 
   const style = document.createElement('style');
   style.id = 'tms60-cloze-helper-style';
@@ -21,6 +23,10 @@
   };
 
   const mobileMode = () => matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  const emptyGuardEnabled = () => {
+    try { const value=localStorage.getItem(EMPTY_GUARD_KEY); return value == null ? true : value !== '0'; }
+    catch (_) { return true; }
+  };
 
   let lastPointerAt = 0;
   document.addEventListener('pointerdown',()=>{lastPointerAt=performance.now();},true);
@@ -79,11 +85,23 @@
     counter.textContent = `${index + 1} / ${inputs.length} words`;
   };
 
+  const injectSettingsToggle = () => {
+    const view = document.getElementById('view-settings');
+    const stack = view?.querySelector('.settings-grid .stack');
+    if (!stack || document.getElementById('qol-recall-controls-card')) return;
+    const card = document.createElement('article');
+    card.id = 'qol-recall-controls-card';
+    card.className = 'card flat';
+    card.innerHTML = `<h2>Recall controls</h2><label class="switch-row"><span><strong>Require text before advancing cloze blanks</strong><br><span class="tiny muted">When enabled, Space/Tab/Next keeps focus on an empty blank instead of skipping it.</span></span><input type="checkbox" id="qol-empty-advance-guard" ${emptyGuardEnabled()?'checked':''}></label>`;
+    stack.appendChild(card);
+  };
+
   let timer = 0;
   const focusFirstUnfinished = () => {
     clearTimeout(timer);
     timer = setTimeout(() => {
       updateCounter();
+      injectSettingsToggle();
       if (performance.now() - lastPointerAt < 220) return;
       const inputs = clozeInputs();
       if (!inputs.length) return;
@@ -117,6 +135,11 @@
     updateCounter();
   },true);
 
+  document.addEventListener('change',event=>{
+    if (event.target?.id !== 'qol-empty-advance-guard') return;
+    try { localStorage.setItem(EMPTY_GUARD_KEY,event.target.checked?'1':'0'); } catch (_) {}
+  },true);
+
   document.addEventListener('focusin',event=>{
     if (event.target?.matches?.('.cloze-input:not(:disabled)')) {
       updateCounter();
@@ -129,10 +152,12 @@
 
   const bind = () => {
     const root = document.getElementById('view-study');
-    if (!root || root.dataset.qolClozeResumeObserved === '1') return;
-    root.dataset.qolClozeResumeObserved = '1';
-    new MutationObserver(focusFirstUnfinished).observe(root,{childList:true,subtree:true});
-    focusFirstUnfinished();
+    if (root && root.dataset.qolClozeResumeObserved !== '1') {
+      root.dataset.qolClozeResumeObserved = '1';
+      new MutationObserver(focusFirstUnfinished).observe(root,{childList:true,subtree:true});
+      focusFirstUnfinished();
+    }
+    injectSettingsToggle();
   };
 
   bind();
