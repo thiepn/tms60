@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const current = document.currentScript;
-  const BUILD = '20260825-stability2';
+  const BUILD = '20260825-stability3';
   const assetUrl = name => {
     const url = new URL(name, current?.src || location.href);
     url.searchParams.set('v', BUILD);
@@ -152,33 +152,60 @@
     };
   }
 
-  const script = document.createElement('script');
-  script.src = coreUrl;
-  script.dataset.tmsVnextCore = '1';
-  script.async = false;
-  script.onload = () => {
-    if (!topLevel && NativeMutationObserver) window.MutationObserver = NativeMutationObserver;
-    if (topLevel) {
-      loadLocalizationRuntime();
-      bindSettingsPreferences();
+  function baseAppReady() {
+    if (topLevel) return true;
+    return typeof renderHome === 'function' &&
+      typeof renderStudy === 'function' &&
+      typeof renderAll === 'function' &&
+      typeof startVerseLearning === 'function' &&
+      typeof completeCurrent === 'function' &&
+      typeof normalizeReference === 'function' &&
+      typeof learningTask === 'function' &&
+      typeof startSession === 'function';
+  }
+
+  function loadExperienceCore(attempt = 0) {
+    if (document.querySelector('script[data-tms-vnext-core]')) return;
+    if (!baseAppReady()) {
+      if (attempt < 200) {
+        setTimeout(() => loadExperienceCore(attempt + 1), 25);
+      } else {
+        if (!topLevel && NativeMutationObserver) window.MutationObserver = NativeMutationObserver;
+        console.error('TMS 60 experience layer was not loaded because the base app did not become ready.');
+      }
+      return;
     }
-    if (!topLevel || !needsUpgradeOnboarding) return;
-    const frame = document.getElementById('app-frame');
-    const show = () => {
-      if (frame && !frame.classList.contains('ready')) return false;
-      if (typeof window.openOnboarding !== 'function') return false;
-      window.openOnboarding();
-      return true;
+
+    const script = document.createElement('script');
+    script.src = coreUrl;
+    script.dataset.tmsVnextCore = '1';
+    script.async = false;
+    script.onload = () => {
+      if (!topLevel && NativeMutationObserver) window.MutationObserver = NativeMutationObserver;
+      if (topLevel) {
+        loadLocalizationRuntime();
+        bindSettingsPreferences();
+      }
+      if (!topLevel || !needsUpgradeOnboarding) return;
+      const frame = document.getElementById('app-frame');
+      const show = () => {
+        if (frame && !frame.classList.contains('ready')) return false;
+        if (typeof window.openOnboarding !== 'function') return false;
+        window.openOnboarding();
+        return true;
+      };
+      if (show() || !frame) return;
+      const observer = new MutationObserver(() => {
+        if (show()) observer.disconnect();
+      });
+      observer.observe(frame, { attributes: true, attributeFilter: ['class'] });
     };
-    if (show() || !frame) return;
-    const observer = new MutationObserver(() => {
-      if (show()) observer.disconnect();
-    });
-    observer.observe(frame, { attributes: true, attributeFilter: ['class'] });
-  };
-  script.onerror = () => {
-    if (!topLevel && NativeMutationObserver) window.MutationObserver = NativeMutationObserver;
-    console.error('TMS 60 experience layer failed to load.');
-  };
-  document.head.appendChild(script);
+    script.onerror = () => {
+      if (!topLevel && NativeMutationObserver) window.MutationObserver = NativeMutationObserver;
+      console.error('TMS 60 experience layer failed to load.');
+    };
+    document.head.appendChild(script);
+  }
+
+  loadExperienceCore();
 })();
