@@ -64,39 +64,36 @@
       'Learning':'학습 중','Maintaining':'복습 중','Stable':'안정됨','Unseen':'미학습','Established':'암송됨','Memorized':'암송 완료','Not established':'미완료','Not learned':'미학습',
       'Learning stage':'학습 단계','Wording interval':'본문 복습 간격','Book, chapter & verse interval':'장절 복습 간격','Delayed proofs':'지연 확인','Study this verse':'이 구절 학습','Type wording':'본문 입력','Recall book, chapter & verse':'장절 맞히기','Reset verse':'구절 초기화',
       'Read & absorb':'읽고 익히기','Listen':'듣기','Queue':'대기 목록','Keyboard':'키보드','Session':'학습','Completed':'완료','Remaining':'남음','Est. time':'예상 시간',
-      'Ctrl/⌘ + Enter checks answers. Space reveals flashcards. Keys 1–4 select a rating after checking.':'Ctrl/⌘ + Enter로 답을 확인합니다. 스페이스바로 플래시카드를 공개합니다. 확인 후 1–4 키로 평가를 선택합니다.','Assisted learning advances the acquisition ladder but does not count as long-term mastery.':'도움을 받는 학습은 학습 단계를 진행시키지만 장기 숙달로 인정되지는 않습니다.',
+      'Ctrl/⌘ + Enter checks answers. Space reveals flashcards. Keys 1–4 select a rating after checking.':'Ctrl/⌘ + Enter로 정답을 확인합니다. 스페이스바로 플래시카드를 뒤집습니다. 확인 후 1–4 키로 평가를 선택합니다.','Assisted learning advances the acquisition ladder but does not count as long-term mastery.':'도움이 있는 학습은 학습 단계를 진행시키지만 장기 숙달로 인정되지 않습니다.',
       'Search all 60 verses and study any one immediately.':'60구절을 검색하고 원하는 구절을 바로 학습할 수 있습니다.','Print':'인쇄','Multi-verse practice':'여러 구절 연습','All packs':'전체 묶음','All statuses':'전체 상태',
-      'Open any verse immediately. The scheduler recommends reviews, but it never controls what you are allowed to study.':'원하는 구절을 즉시 열 수 있습니다. 복습 일정은 추천만 하며 학습할 수 있는 구절을 제한하지 않습니다.','Select a verse and a mode. You can move forward, repeat the same verse, or jump anywhere at any time.':'구절과 학습 방식을 선택하세요. 다음 구절로 넘어가거나 같은 구절을 반복하거나 언제든 원하는 구절로 이동할 수 있습니다.','Choose “Recommended learning path” to continue this verse from its current stage, or select any practice mode directly.':'“추천 학습 과정”을 선택하면 현재 단계부터 이어서 학습할 수 있으며 원하는 연습 방식을 직접 선택할 수도 있습니다.',
-      'See what you are learning now, what you can already recall, and what has become stable over time.':'현재 학습 중인 구절, 이미 암송할 수 있는 구절, 장기적으로 안정된 구절을 확인하세요.','30-day exact':'30일 정확도','30-DAY EXACT':'30일 정확도','Perfect recalls':'완벽 회상','PERFECT RECALLS':'완벽 회상','Still moving through guided learning stages':'추천 학습 단계를 진행 중','Wording established; building long-term retention':'본문 암송 완료 · 장기 기억을 강화하는 중','21+ day interval and two spaced perfect proofs':'21일 이상 간격과 두 번의 완벽한 지연 확인','Average unaided wording and book, chapter & verse score':'도움 없이 수행한 본문 및 장절 평균 점수','Share of recent unaided checks scored 100%':'최근 도움 없는 확인에서 100%를 기록한 비율','Each bar includes learning, maintaining, and stable verses.':'각 막대에는 학습 중, 복습 중, 안정된 구절이 함께 표시됩니다.',
-      'Adjust workload, appearance, scheduling targets, and local backups.':'학습량, 화면 설정, 일정 목표, 로컬 백업을 조정하세요.','Progress is stored in this browser. Export a JSON backup before clearing browser data or changing devices.':'진행 상황은 이 브라우저에 저장됩니다. 브라우저 데이터를 삭제하거나 기기를 바꾸기 전에 JSON 백업을 내보내세요.','Light uses white surfaces. Dark uses a deep background tinted by the selected accent.':'라이트 모드는 밝은 화면을, 다크 모드는 선택한 강조 색상이 반영된 어두운 화면을 사용합니다.','Study freely.':'자유롭게 학습하세요.','Guided sessions remain available for recommendations, but the Study tab and Library always let you open any verse immediately.':'추천 학습은 계속 사용할 수 있지만 학습 탭과 전체 구절에서는 언제든 원하는 구절을 바로 열 수 있습니다.',
+      'Open any verse immediately. The scheduler recommends reviews, but it never controls what you are allowed to study.':'원하는 구절을 즉시 열 수 있습니다. 복습 일정은 추천만 하며 어떤 구절을 학습할 수 있는지 제한하지 않습니다.','Select a verse and a mode. You can move forward, repeat the same verse, or jump anywhere at any time.':'구절과 학습 방식을 선택하세요. 다음 구절로 이동하거나 같은 구절을 반복하거나 언제든 원하는 구절로 이동할 수 있습니다.','Choose “Recommended learning path” to continue this verse from its current stage, or select any practice mode directly.':'“추천 학습 과정”을 선택하여 현재 단계부터 계속하거나 원하는 연습 방식을 직접 선택할 수 있습니다.',
+      'See what you are learning now, what you can already recall, and what has become stable over time.':'현재 학습 중인 구절, 이미 암송할 수 있는 구절, 장기적으로 안정된 구절을 확인하세요.','30-day exact':'30일 정확도','30-DAY EXACT':'30일 정확도','Perfect recalls':'완벽 회상','PERFECT RECALLS':'완벽 회상','Still moving through guided learning stages':'추천 학습 단계를 진행 중','Wording established; building long-term retention':'본문 암송 완료; 장기 기억을 형성 중','21+ day interval and two spaced perfect proofs':'21일 이상 간격 및 두 번의 분산 완벽 확인','Average unaided wording and book, chapter & verse score':'도움 없이 본문 및 장절을 회상한 평균 점수','Share of recent unaided checks scored 100%':'최근 도움 없는 확인 중 100%를 받은 비율','Each bar includes learning, maintaining, and stable verses.':'각 막대에는 학습 중, 복습 중, 안정된 구절이 포함됩니다.',
+      'Adjust workload, appearance, scheduling targets, and local backups.':'학습량, 화면 설정, 일정 목표 및 로컬 백업을 조정하세요.','Progress is stored in this browser. Export a JSON backup before clearing browser data or changing devices.':'진행 상황은 이 브라우저에 저장됩니다. 브라우저 데이터를 지우거나 기기를 변경하기 전에 JSON 백업을 내보내세요.','Light uses white surfaces. Dark uses a deep background tinted by the selected accent.':'라이트 모드는 흰색 화면을 사용하고 다크 모드는 선택한 강조 색상이 적용된 어두운 배경을 사용합니다.','Study freely.':'자유롭게 학습하세요.','Guided sessions remain available for recommendations, but the Study tab and Library always let you open any verse immediately.':'추천 학습은 계속 사용할 수 있지만 학습 탭과 구절 목록에서는 언제든 원하는 구절을 바로 열 수 있습니다.',
       'Living the New Life':'새 생명 안에서 살기','Proclaiming Christ':'그리스도를 전파하기','Reliance on God’s Resources':'하나님의 자원을 의지하기',"Reliance on God's Resources":'하나님의 자원을 의지하기','Being Christ’s Disciple':'그리스도의 제자로 살기',"Being Christ's Disciple":'그리스도의 제자로 살기','Growth in Christlikeness':'그리스도를 닮아가기'
     }
   };
 
-  function localizeReference(s,l){
-    if(l==='en')return s;
-    let out=String(s);
-    for(const [en,names] of Object.entries(BOOKS).sort((a,b)=>b[0].length-a[0].length)){
-      const esc=en.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-      out=out.replace(new RegExp('(^|\\b)'+esc+'(?=\\s+\\d+:\\d)','g'),(_,p)=>p+names[l==='de'?0:1]);
-    }
+  function localizePackText(x,l){const vals=PACKS[x];return vals?(l==='de'?vals[0]:l==='ko'?vals[1]:x):x}
+  function localizeRef(s,l){
+    if(l==='en')return s;let out=String(s||'');
+    for(const[name,vals]of Object.entries(BOOKS)){const localized=l==='de'?vals[0]:vals[1];out=out.replace(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`,'i'),localized)}
     return out;
   }
-  function localizePack(s,l){const x=PACKS[s];return x?x[l==='de'?0:1]:s}
-
   function tr(raw,l){
-    const s=String(raw??'');if(l==='en'||!s.trim())return s;
-    const lead=s.match(/^\s*/)?.[0]||'',trail=s.match(/\s*$/)?.[0]||'',core=s.slice(lead.length,s.length-trail.length),dict=D[l]||{};
-    if(Object.hasOwn(dict,core))return lead+dict[core]+trail;
+    const s=String(raw??'');if(l==='en')return s;const lead=s.match(/^\s*/)?.[0]||'',trail=s.match(/\s*$/)?.[0]||'',core=s.slice(lead.length,s.length-trail.length),dict=D[l]||{};
+    if(Object.prototype.hasOwnProperty.call(dict,core))return lead+dict[core]+trail;
+    const pack=localizePackText(core,l);if(pack!==core)return lead+pack+trail;
     let m;
-    if((m=core.match(/^([✓✔])\s*(.+)$/))){const body=tr(m[2],l);return lead+m[1]+' '+body.trim()+trail}
-    if((m=core.match(/^(?:Pack|Paket|묶음)\s+([A-E])\s*[·:]\s*(.+)$/))){return lead+(l==='de'?'Paket ':'묶음 ')+m[1]+' · '+localizePack(m[2],l)+trail}
-    if((m=core.match(/^(?:Pack|Paket|묶음)\s+([A-E])$/)))return lead+(l==='de'?'Paket ':'묶음 ')+m[1]+trail;
-    if((m=core.match(/^(\d+)\.\s+(.+\d+:\d+(?:-\d+)?)$/)))return lead+m[1]+'. '+localizeReference(m[2],l)+trail;
-    const rr=localizeReference(core,l);if(rr!==core)return lead+rr+trail;
-    if((m=core.match(/^(Unseen|Learning|Maintaining|Stable|Established)\s*·\s*(.+)$/))){const status=tr(m[1],l).trim();return lead+status+' · '+localizeReference(m[2],l)+trail}
-    if((m=core.match(/^Review what is due, then continue the verse you are learning\. Approximately (\d+) minutes?\.$/)))return lead+(l==='de'?`Wiederhole zuerst das Fällige und lerne danach deinen aktuellen Vers weiter. Ungefähr ${m[1]} ${m[1]==='1'?'Minute':'Minuten'}.`:`먼저 복습할 내용을 완료한 뒤 현재 학습 중인 구절을 이어서 학습하세요. 약 ${m[1]}분.`)+trail;
-    if((m=core.match(/^Interface scale:\s*(\d+)%$/)))return lead+(l==='de'?`Oberflächengröße: ${m[1]} %`:`화면 크기: ${m[1]}%`)+trail;
+    if((m=core.match(/^(.*\d+:\d+(?:-\d+)?)(\s.*)?$/))){const r=localizeRef(m[1],l);if(r!==m[1])return lead+r+(m[2]||'')+trail}
+    if((m=core.match(/^(\d+) days?$/)))return lead+(l==='de'?`${m[1]} Tage`:`${m[1]}일`)+trail;
+    if((m=core.match(/^(\d+) min$/)))return lead+(l==='de'?`${m[1]} Min.`:`${m[1]}분`)+trail;
+    if((m=core.match(/^Pack ([A-E])$/)))return lead+(l==='de'?`Paket ${m[1]}`:`묶음 ${m[1]}`)+trail;
+    if((m=core.match(/^Task (\d+) of (\d+)$/)))return lead+(l==='de'?`Aufgabe ${m[1]} von ${m[2]}`:`${m[2]}개 중 ${m[1]}번째`)+trail;
+    if((m=core.match(/^Study (.+)$/)))return lead+(l==='de'?`${localizeRef(m[1],l)} lernen`:`${localizeRef(m[1],l)} 학습`)+trail;
+    if((m=core.match(/^Continue (.+)$/)))return lead+(l==='de'?`${localizeRef(m[1],l)} weiterlernen`:`${localizeRef(m[1],l)} 계속`)+trail;
+    if((m=core.match(/^Hide (\d+)%$/)))return lead+(l==='de'?`${m[1]} % ausblenden`:`${m[1]}% 가리기`)+trail;
+    if((m=core.match(/^Current status:\s*(.+)$/)))return lead+(l==='de'?`Aktueller Status: ${tr(m[1],l)}`:`현재 상태: ${tr(m[1],l)}`)+trail;
+    if((m=core.match(/^Assessment record:\s*(.+)$/)))return lead+(l==='de'?`Einstufungsprotokoll: ${m[1]}`:`평가 기록: ${m[1]}`)+trail;
     if((m=core.match(/^Recover snapshot \((\d+)\)$/)))return lead+(l==='de'?`Schnappschuss wiederherstellen (${m[1]})`:`자동 백업 복원 (${m[1]})`)+trail;
     if((m=core.match(/^(\d+) verses?$/)))return lead+(l==='de'?`${m[1]} ${m[1]==='1'?'Vers':'Verse'}`:`${m[1]}구절`)+trail;
     if((m=core.match(/^Verse (\d+) of 60$/)))return lead+(l==='de'?`Vers ${m[1]} von 60`:`60구절 중 ${m[1]}번`)+trail;
@@ -130,15 +127,26 @@
   }
   function translateDocument(doc){if(!doc?.body)return;const l=currentLang();doc.documentElement.lang=l;translateElement(doc.body,l)}
 
+  function setLanguage(next){
+    if(!SUPPORTED.has(next))return false;
+    try{localStorage.setItem(KEY,next)}catch(_){return false}
+    if(observedDocument)translateDocument(observedDocument);
+    requestAnimationFrame(()=>{if(observedDocument)translateDocument(observedDocument)});
+    setTimeout(()=>{if(observedDocument)translateDocument(observedDocument)},80);
+    window.dispatchEvent(new CustomEvent('tms60:ui-language-change',{detail:{language:next}}));
+    return true;
+  }
+  window.__TMS60_SET_UI_LANGUAGE__=setLanguage;
+  window.__TMS60_APPLY_LOCALIZATION__=()=>{if(observedDocument)translateDocument(observedDocument)};
+
   function attachToFrame(){
     const frame=document.getElementById('app-frame');if(!frame)return;
     const attach=()=>{
       const doc=frame.contentDocument;if(!doc?.body){setTimeout(attach,100);return}
-      if(observedDocument===doc)return;
+      if(observedDocument===doc){translateDocument(doc);return}
       if(observer)observer.disconnect();observedDocument=doc;translateDocument(doc);
       observer=new MutationObserver(records=>{const l=currentLang();for(const record of records)for(const node of record.addedNodes)translateElement(node,l)});
       observer.observe(doc.body,{childList:true,subtree:true});
-      doc.addEventListener('change',event=>{if(event.target?.id==='ui-language-select')requestAnimationFrame(()=>translateDocument(doc))},true);
       doc.addEventListener('click',()=>requestAnimationFrame(()=>translateDocument(doc)),true);
       doc.documentElement.dataset.tmsLocalizationRuntime='loaded';
     };
