@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_LANGUAGE_SWITCH_HARDENING__) return;
-  window.__TMS60_LANGUAGE_SWITCH_HARDENING__ = '1.3.0';
+  window.__TMS60_LANGUAGE_SWITCH_HARDENING__ = '1.4.0';
 
   const KEY = 'tms60-ui-language-v1';
   const SUPPORTED = new Set(['en', 'de', 'ko']);
@@ -57,6 +57,16 @@
     } catch (_) {}
   }
 
+  function suppressLegacyLanguageRenderForCurrentEvent() {
+    const original = window.renderAll;
+    if (typeof original !== 'function') return;
+    const suppressed = () => {};
+    window.renderAll = suppressed;
+    queueMicrotask(() => {
+      if (window.renderAll === suppressed) window.renderAll = original;
+    });
+  }
+
   window.addEventListener('change', event => {
     const select = event.target;
     if (!(select instanceof HTMLSelectElement) || select.id !== 'ui-language-select') return;
@@ -85,11 +95,12 @@
       return;
     }
 
-    // Persist before the document/target handlers run, then deliberately let the
-    // normal event continue. The parent localization runtime owns DE/KO and can
-    // translate this same document in place. Rebuilding the iframe here caused
-    // the prior ready/unload race and is no longer necessary now that the legacy
-    // iframe localizer is pinned to canonical English.
+    // The legacy iframe language listener still receives this event, but its
+    // renderAll() call is suppressed for this one synchronous dispatch. That
+    // prevents the old iframe localizer from rebuilding/localizing the complete
+    // app while the parent localization runtime handles DE/KO. The parent-side
+    // capture/completion listeners still receive the same change event normally.
+    suppressLegacyLanguageRenderForCurrentEvent();
     document.documentElement.lang = next;
     queueMicrotask(syncSelectors);
     setTimeout(syncSelectors, 120);
