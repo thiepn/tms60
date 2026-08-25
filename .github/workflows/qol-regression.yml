@@ -6,9 +6,11 @@ on:
       - 'qol-word-navigation.js'
       - 'qol-fast-recall.js'
       - 'qol-cloze-helpers.js'
+      - 'guided-learning-chain.js'
       - 'enhancements.js'
       - 'sw.js'
       - 'tests/qol-regression-v2.mjs'
+      - 'tests/guided-due-regression.mjs'
       - '.github/workflows/qol-regression.yml'
   workflow_dispatch:
 permissions:
@@ -27,3 +29,4 @@ jobs:
           npx playwright install --with-deps chromium
       - run: sleep 25
       - run: node tests/qol-regression-v2.mjs
+      - run: node tests/guided-due-regression.mjs
