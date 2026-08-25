@@ -1,0 +1,46 @@
+name: RC1 Production Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'app.html'
+      - 'translations.js'
+      - 'enhancements.js'
+      - 'enhancements-core.js'
+      - 'localization-runtime.js'
+      - 'localization-completion.js'
+      - 'sw.js'
+      - 'manifest.webmanifest'
+      - 'worker/**'
+      - 'tests/rc1-production-audit.mjs'
+      - '.github/workflows/rc1-production-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Wait briefly for GitHub Pages propagation
+        run: sleep 20
+
+      - name: Run RC1 production audit
+        run: node tests/rc1-production-audit.mjs
