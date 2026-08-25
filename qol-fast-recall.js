@@ -1,7 +1,17 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_FAST_RECALL_QOL__) return;
-  window.__TMS60_FAST_RECALL_QOL__ = '1.2.0';
+  window.__TMS60_FAST_RECALL_QOL__ = '1.3.0';
+
+  const style = document.createElement('style');
+  style.id = 'tms60-fast-recall-style';
+  style.textContent = `
+    .rating-row.qol-rating-ready:focus{
+      outline:3px solid color-mix(in srgb,var(--accent) 62%,transparent);
+      outline-offset:6px;border-radius:14px;
+    }
+  `;
+  document.head.appendChild(style);
 
   const visibleEnabled = el => {
     if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
@@ -26,9 +36,29 @@
     el.matches?.('input:not(:disabled),textarea:not(:disabled),select:not(:disabled),[contenteditable="true"]')
   );
 
+  let lastPointerAt = 0;
+  document.addEventListener('pointerdown',()=>{lastPointerAt=performance.now();},true);
+
+  const armRatingGroup = () => {
+    const rows = [...document.querySelectorAll('.rating-row')].filter(visibleEnabled);
+    for (const row of rows) {
+      row.classList.add('qol-rating-ready');
+      row.tabIndex = 0;
+      row.setAttribute('aria-label','Choose recall rating: 1 Again, 2 Hard, 3 Good, 4 Easy');
+    }
+    if (!rows.length || performance.now() - lastPointerAt < 220) return;
+    const active = document.activeElement;
+    if (active?.matches?.('.rate-btn') || active === document.body || active === document.documentElement) {
+      setTimeout(() => {
+        const row = rows.find(visibleEnabled);
+        if (row && performance.now() - lastPointerAt >= 220) row.focus({preventScroll:true});
+      },45);
+    }
+  };
+
   const bestStudyTarget = () => {
     const selectors = [
-      '.rate-btn:not(:disabled)',
+      '.rating-row.qol-rating-ready',
       '#typing-answer:not(:disabled)',
       '#initials-answer:not(:disabled)',
       '#reference-answer:not(:disabled)',
@@ -57,6 +87,7 @@
   const scheduleStudyFocus = () => {
     clearTimeout(focusTimer);
     focusTimer = setTimeout(() => {
+      armRatingGroup();
       const active = document.activeElement;
       if (active && active !== document.body && active !== document.documentElement && document.contains(active) && visibleEnabled(active)) return;
       const target = bestStudyTarget();
@@ -86,6 +117,12 @@
 
     if (event.key !== 'Enter' || event.shiftKey) return;
 
+    if (event.target?.matches?.('.rating-row.qol-rating-ready')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
     const target = event.target;
     let selector = '';
     if (target?.id === 'typing-answer') selector = '[data-action="check-typing"]';
@@ -104,6 +141,7 @@
     if (!root || root.dataset.qolFocusObserved === '1') return;
     root.dataset.qolFocusObserved = '1';
     new MutationObserver(scheduleStudyFocus).observe(root,{childList:true,subtree:true});
+    armRatingGroup();
   };
   bindStudyObserver();
   new MutationObserver(bindStudyObserver).observe(document.body,{childList:true,subtree:true});
