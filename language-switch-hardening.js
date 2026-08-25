@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_LANGUAGE_SWITCH_HARDENING__) return;
-  window.__TMS60_LANGUAGE_SWITCH_HARDENING__ = '1.5.0';
+  window.__TMS60_LANGUAGE_SWITCH_HARDENING__ = '1.6.0';
 
   const KEY = 'tms60-ui-language-v1';
   const SUPPORTED = new Set(['en', 'de', 'ko']);
@@ -58,14 +58,44 @@
   }
 
   function requestParentLocalization() {
-    // Both parent localization layers already listen for document clicks in this
-    // iframe. Dispatching a target-only synthetic click wakes those parent-owned
-    // translators without invoking the legacy language-change handler or
-    // rebuilding the iframe. The target is Document, so normal button/action
-    // delegation has nothing actionable to match.
+    // Parent localization layers already respond to inert document clicks. Use
+    // BODY as the event target so the app's delegated click handler safely sees
+    // an Element with closest(), while no button/action/view is activated.
     try {
-      document.dispatchEvent(new Event('click', { bubbles: false, cancelable: false }));
+      document.body?.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: false,
+        view: window
+      }));
     } catch (_) {}
+  }
+
+  function installIdempotentSettingsNavigation() {
+    if (window.__TMS60_IDEMPOTENT_SETTINGS_NAV__ || typeof switchView !== 'function') return;
+    const coreSwitchView = switchView;
+    window.__TMS60_IDEMPOTENT_SETTINGS_NAV__ = '1.0.0';
+    switchView = function(view) {
+      const current = document.documentElement.dataset.view;
+      const activeSettings = view === 'settings' &&
+        current === 'settings' &&
+        document.getElementById('view-settings')?.classList.contains('active');
+
+      if (activeSettings) {
+        // Re-entering an already active Settings view used to replace the entire
+        // settings subtree. That unnecessarily destroyed the parent-injected
+        // language/Bible cards and started a recreate/reparent/localize cycle.
+        // Keep the existing localized subtree intact instead.
+        try {
+          const drawerWasOpen = document.getElementById('sidebar')?.classList.contains('open');
+          if (typeof setSidebarOpen === 'function') setSidebarOpen(false, drawerWasOpen);
+          const mobileScroller = matchMedia('(max-width:760px)').matches ? document.querySelector('.content') : null;
+          if (mobileScroller) mobileScroller.scrollTo({ top: 0, behavior: 'auto' });
+          else scrollTo({ top: 0, behavior: 'auto' });
+        } catch (_) {}
+        return;
+      }
+      return coreSwitchView(view);
+    };
   }
 
   window.addEventListener('change', event => {
@@ -105,6 +135,7 @@
     }, 120);
   }, true);
 
+  installIdempotentSettingsNavigation();
   syncSelectors();
   const observer = new MutationObserver(() => queueMicrotask(syncSelectors));
   observer.observe(document.body, { childList: true, subtree: true });
