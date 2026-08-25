@@ -3,6 +3,19 @@ on:
   push:
     branches: [main]
     paths:
+      - 'index.html'
+      - 'app.html'
+      - 'translations.js'
+      - 'enhancements.js'
+      - 'enhancements-legacy.js'
+      - 'enhancements-core.js'
+      - 'rc3-hardening.js'
+      - 'guided-learning-chain.js'
+      - 'qol-fast-recall.js'
+      - 'qol-cloze-helpers.js'
+      - 'qol-word-navigation.js'
+      - 'localization-runtime.js'
+      - 'localization-completion.js'
       - 'tests/rc1-localization-gate.mjs'
       - '.github/workflows/rc1-localization-gate.yml'
   workflow_dispatch:
