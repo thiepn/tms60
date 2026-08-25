@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_FAST_RECALL_QOL__) return;
-  window.__TMS60_FAST_RECALL_QOL__ = '1.5.1';
+  window.__TMS60_FAST_RECALL_QOL__ = '1.6.0';
 
   const style = document.createElement('style');
   style.id = 'tms60-fast-recall-style';
@@ -25,6 +25,7 @@
     .qol-session-track{height:6px;border-radius:999px;background:var(--surface3);overflow:hidden}
     .qol-session-fill{height:100%;border-radius:inherit;background:var(--accent);transition:width .2s ease}
     .qol-session-ref{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34vw}
+    .qol-repeat-hint{font-size:.72rem;font-weight:700;opacity:.72}
     @media(max-width:560px){.qol-session-strip{grid-template-columns:auto 1fr}.qol-session-ref{grid-column:1/-1;max-width:none}.qol-session-track{min-width:80px}}
   `;
   document.head.appendChild(style);
@@ -55,6 +56,8 @@
   let lastPointerAt = 0;
   document.addEventListener('pointerdown',()=>{lastPointerAt=performance.now();},true);
 
+  const ratingRowFor = el => el?.closest?.('.rating-row') || null;
+
   const armRatingGroup = () => {
     const rows = [...document.querySelectorAll('.rating-row')].filter(visibleEnabled);
     for (const row of rows) {
@@ -64,13 +67,18 @@
     }
     if (!rows.length || performance.now() - lastPointerAt < 220) return;
     const active = document.activeElement;
-    if (active?.matches?.('.rate-btn') || active === document.body || active === document.documentElement) {
-      setTimeout(() => {
-        const row = rows.find(visibleEnabled);
-        if (row && performance.now() - lastPointerAt >= 220) row.focus({preventScroll:true});
-      },45);
+    const row = ratingRowFor(active) || rows[0];
+    if (active?.matches?.('.rate-btn') || active === document.body || active === document.documentElement || active?.matches?.('.cloze-input:disabled,input:disabled,textarea:disabled')) {
+      row?.focus({preventScroll:true});
     }
   };
+
+  document.addEventListener('focusin',event=>{
+    const button=event.target?.closest?.('.rate-btn');
+    if(!button || performance.now()-lastPointerAt<220) return;
+    const row=ratingRowFor(button);
+    if(row?.classList.contains('qol-rating-ready')) row.focus({preventScroll:true});
+  },true);
 
   const updateSessionStrip = () => {
     const root = document.getElementById('view-study');
@@ -99,6 +107,53 @@
     strip.innerHTML = `<strong>Task ${current} of ${total}</strong><div class="qol-session-track" aria-hidden="true"><div class="qol-session-fill" style="width:${Math.round(100*current/total)}%"></div></div><span class="qol-session-ref">${reference}</span>`;
   };
 
+  const lastRepeatTarget = () => {
+    if (typeof session !== 'object' || !Array.isArray(session.results) || !session.results.length) return null;
+    const result = session.results[session.results.length - 1];
+    const id = Number(result?.verseId);
+    if (!Number.isInteger(id) || id < 1 || id > 60) return null;
+    let mode = String(result?.mode || 'path');
+    try { if (mode !== 'path' && (!Array.isArray(PRACTICE_MODES) || !PRACTICE_MODES.includes(mode))) mode='path'; } catch (_) { mode='path'; }
+    return {id,mode};
+  };
+
+  const ensureRepeatButton = () => {
+    const complete = [...document.querySelectorAll('.session-complete')].find(visibleEnabled);
+    if (!complete) return null;
+    let button = complete.querySelector('[data-qol-repeat-verse]');
+    const target = lastRepeatTarget();
+    if (!target) { button?.remove(); return null; }
+    if (!button) {
+      button=document.createElement('button');
+      button.type='button';
+      button.className='btn';
+      button.setAttribute('data-qol-repeat-verse','1');
+      const actions=complete.querySelector('.actions,.item-actions,.modal-actions') || complete;
+      actions.appendChild(button);
+    }
+    button.dataset.verseId=String(target.id);
+    button.dataset.mode=target.mode;
+    button.innerHTML='Repeat this verse <span class="qol-repeat-hint">R</span>';
+    return button;
+  };
+
+  const repeatVerse = button => {
+    const target = button ? {id:Number(button.dataset.verseId),mode:button.dataset.mode||'path'} : lastRepeatTarget();
+    if(!target || !Number.isInteger(target.id)) return false;
+    try {
+      if(typeof clearSession==='function') clearSession();
+      if(typeof startSingleVersePractice==='function') return startSingleVersePractice(target.id,target.mode) !== false;
+    } catch(error) { console.error('Could not repeat verse',error); }
+    return false;
+  };
+
+  document.addEventListener('click',event=>{
+    const button=event.target?.closest?.('[data-qol-repeat-verse]');
+    if(!button) return;
+    event.preventDefault();
+    repeatVerse(button);
+  },true);
+
   const bestStudyTarget = () => {
     const selectors = [
       '.rating-row.qol-rating-ready',
@@ -113,6 +168,7 @@
       '[data-action="complete-listen"]:not(:disabled)',
       '[data-action="flashcard-next"]:not(:disabled)',
       '.session-complete .btn.primary:not(:disabled)',
+      '.session-complete [data-qol-repeat-verse]:not(:disabled)',
       '#view-study .btn.primary:not(:disabled)'
     ];
     for (const selector of selectors) {
@@ -132,6 +188,7 @@
     focusTimer = setTimeout(() => {
       armRatingGroup();
       updateSessionStrip();
+      ensureRepeatButton();
       const active = document.activeElement;
       if (active && active !== document.body && active !== document.documentElement && document.contains(active) && visibleEnabled(active)) return;
       const target = bestStudyTarget();
@@ -141,14 +198,14 @@
         try { target.select(); } catch (_) {}
       }
       target.scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});
-    }, 35);
+    }, 20);
   };
 
   const repeatVerseButton = () => {
+    ensureRepeatButton();
     const complete = [...document.querySelectorAll('.session-complete')].find(visibleEnabled);
     if (!complete) return null;
-    const buttons = [...complete.querySelectorAll('button:not(:disabled)')].filter(visibleEnabled);
-    return buttons.find(button => /repeat|same verse/i.test(button.textContent || '')) || null;
+    return [...complete.querySelectorAll('[data-qol-repeat-verse],button:not(:disabled)')].filter(visibleEnabled).find(button => button.hasAttribute('data-qol-repeat-verse') || /repeat|same verse/i.test(button.textContent || '')) || null;
   };
 
   document.addEventListener('keydown', event => {
@@ -205,6 +262,7 @@
     new MutationObserver(scheduleStudyFocus).observe(root,{childList:true,subtree:true});
     armRatingGroup();
     updateSessionStrip();
+    ensureRepeatButton();
   };
   bindStudyObserver();
   new MutationObserver(bindStudyObserver).observe(document.body,{childList:true,subtree:true});
