@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_FAST_RECALL_QOL__) return;
-  window.__TMS60_FAST_RECALL_QOL__ = '1.6.0';
+  window.__TMS60_FAST_RECALL_QOL__ = '1.6.1';
 
   const style = document.createElement('style');
   style.id = 'tms60-fast-recall-style';
@@ -131,9 +131,13 @@
       const actions=complete.querySelector('.actions,.item-actions,.modal-actions') || complete;
       actions.appendChild(button);
     }
-    button.dataset.verseId=String(target.id);
-    button.dataset.mode=target.mode;
-    button.innerHTML='Repeat this verse <span class="qol-repeat-hint">R</span>';
+    const signature=`${target.id}|${target.mode}`;
+    if(button.dataset.signature!==signature){
+      button.dataset.signature=signature;
+      button.dataset.verseId=String(target.id);
+      button.dataset.mode=target.mode;
+      button.innerHTML='Repeat this verse <span class="qol-repeat-hint">R</span>';
+    }
     return button;
   };
 
