@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_CLOZE_HELPERS_QOL__) return;
-  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.1.0';
+  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.2.0';
 
   const style = document.createElement('style');
   style.id = 'tms60-cloze-helper-style';
@@ -20,10 +20,31 @@
     return cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0;
   };
 
+  const mobileMode = () => matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+
   let lastPointerAt = 0;
   document.addEventListener('pointerdown',()=>{lastPointerAt=performance.now();},true);
 
   const clozeInputs = () => [...document.querySelectorAll('.cloze-input:not(:disabled)')].filter(visibleEnabled);
+
+  const positionMobileInput = input => {
+    if (!input || !mobileMode()) return;
+    const move = () => {
+      if (document.activeElement !== input || !document.contains(input)) return;
+      const scroller = document.querySelector('.content');
+      if (!scroller || scroller.scrollHeight <= scroller.clientHeight) {
+        input.scrollIntoView({block:'center',inline:'nearest',behavior:'auto'});
+        return;
+      }
+      const sr = scroller.getBoundingClientRect();
+      const ir = input.getBoundingClientRect();
+      const desiredTop = sr.top + Math.max(72, sr.height * 0.34);
+      const delta = ir.top - desiredTop;
+      if (Math.abs(delta) > 12) scroller.scrollBy({top:delta,behavior:'auto'});
+    };
+    setTimeout(move,70);
+    setTimeout(move,260);
+  };
 
   const updateCounter = () => {
     const line = document.querySelector('.cloze-line');
@@ -71,11 +92,15 @@
       try { target.select(); } catch (_) {}
       target.scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});
       updateCounter();
+      positionMobileInput(target);
     }, 70);
   };
 
   document.addEventListener('focusin',event=>{
-    if (event.target?.matches?.('.cloze-input:not(:disabled)')) updateCounter();
+    if (event.target?.matches?.('.cloze-input:not(:disabled)')) {
+      updateCounter();
+      positionMobileInput(event.target);
+    }
   },true);
   document.addEventListener('input',event=>{
     if (event.target?.matches?.('.cloze-input:not(:disabled)')) updateCounter();
