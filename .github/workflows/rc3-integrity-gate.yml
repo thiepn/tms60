@@ -1,0 +1,35 @@
+name: RC3 Integrity Gate
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app.html'
+      - 'enhancements.js'
+      - 'enhancements-legacy.js'
+      - 'enhancements-core.js'
+      - 'rc3-hardening.js'
+      - 'guided-learning-chain.js'
+      - 'tests/rc3-integrity-gate.mjs'
+      - 'tests/wait-for-pages-deployment.mjs'
+      - '.github/workflows/rc3-integrity-gate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Wait for exact GitHub Pages deployment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tests/wait-for-pages-deployment.mjs
+      - run: node tests/rc3-integrity-gate.mjs
