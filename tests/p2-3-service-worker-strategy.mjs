@@ -54,7 +54,7 @@ try{
   const sourceResponse=await page.request.get(APP+'sw.js',{headers:{'cache-control':'no-cache'}});
   const source=await sourceResponse.text();
   check(sourceResponse.status()===200,'Service worker source reachable',String(sourceResponse.status()));
-  check(source.includes("tms60-stability29-2026-08-26"),'P2-3 cache revision deployed');
+  check(source.includes("tms60-stability30-2026-08-26"),'P2-3 cache revision deployed');
   check(!source.includes("cache:'no-store'")&&!source.includes('cache:"no-store"'),'Runtime no-store override removed');
   check(source.includes('function networkFirst('),'Network-first strategy is explicit');
   check(source.includes('async function cacheFirst('),'Cache-first strategy is explicit');
@@ -67,11 +67,11 @@ try{
   await frameOf(page);
   const worker=await settleWorker(page);
   check(worker.controlled,'Page is controlled by a service worker');
-  check(worker.caches.includes('tms60-stability29-2026-08-26'),'Current P2-3 cache is active',worker.caches.join(', '));
-  check(!worker.caches.some(name=>name.startsWith('tms60-')&&name!=='tms60-stability29-2026-08-26'),'Older TMS caches removed',worker.caches.join(', '));
+  check(worker.caches.includes('tms60-stability30-2026-08-26'),'Current P2-3 cache is active',worker.caches.join(', '));
+  check(!worker.caches.some(name=>name.startsWith('tms60-')&&name!=='tms60-stability30-2026-08-26'),'Older TMS caches removed',worker.caches.join(', '));
 
   const cacheState=await page.evaluate(async()=>{
-    const cache=await caches.open('tms60-stability29-2026-08-26');
+    const cache=await caches.open('tms60-stability30-2026-08-26');
     const urls=(await cache.keys()).map(r=>new URL(r.url).pathname);
     return {
       index:urls.some(x=>x.endsWith('/tms60/index.html')),
