@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const current=document.currentScript;
-  const BUILD='20260826-stability14';
+  const BUILD='20260826-stability15';
   const assetUrl=name=>{const u=new URL(name,current?.src||location.href);u.searchParams.set('v',BUILD);return u.href};
   const topLevel=window.top===window;
   const UI_LANGUAGE_KEY='tms60-ui-language-v1';
@@ -119,9 +119,6 @@
     };
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bindFrame,{once:true});else bindFrame();
   } else {
-    // Keep the legacy iframe experience layer in canonical English mode while
-    // preventing it from overwriting the parent-owned UI language preference.
-    // The parent localization runtime/completion layer is the single DE/KO owner.
     installIframeLocalizationGuard();
   }
 
