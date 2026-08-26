@@ -8,6 +8,7 @@ on:
       - 'qol-cloze-helpers.js'
       - 'guided-learning-chain.js'
       - 'enhancements.js'
+      - 'language-switch-hardening.js'
       - 'sw.js'
       - 'tests/qol-regression-v2.mjs'
       - 'tests/guided-due-regression.mjs'
