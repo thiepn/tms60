@@ -1,0 +1,37 @@
+name: P1-2 Version Session Guard
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'app.html'
+      - 'translations.js'
+      - 'ux-patch.js'
+      - 'enhancements.js'
+      - 'enhancements-core.js'
+      - 'language-switch-hardening.js'
+      - 'sw.js'
+      - 'tests/p1-2-version-session-guard.mjs'
+      - 'tests/wait-for-pages-deployment.mjs'
+      - '.github/workflows/p1-2-version-session-guard.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Wait for exact GitHub Pages deployment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tests/wait-for-pages-deployment.mjs
+      - run: node tests/p1-2-version-session-guard.mjs
