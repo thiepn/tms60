@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_FAST_RECALL_QOL__) return;
-  window.__TMS60_FAST_RECALL_QOL__ = '1.6.2';
+  window.__TMS60_FAST_RECALL_QOL__ = '1.7.0';
 
   const style = document.createElement('style');
   style.id = 'tms60-fast-recall-style';
@@ -11,22 +11,16 @@
       outline-offset:6px;border-radius:14px;
     }
     .qol-session-strip{
-      position:sticky;top:0;z-index:12;
-      display:grid;grid-template-columns:auto minmax(90px,1fr) auto;
-      gap:10px;align-items:center;
-      margin:0 0 14px;padding:8px 10px;
-      border:1px solid color-mix(in srgb,var(--border) 78%,transparent);
-      border-radius:12px;background:color-mix(in srgb,var(--surface) 94%,transparent);
-      backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-      box-shadow:0 5px 18px rgba(0,0,0,.08);
-      font-size:.76rem;color:var(--muted);
+      position:static;z-index:auto;display:block;
+      margin:0 0 10px;padding:2px 4px;border:0;border-radius:0;
+      background:transparent;box-shadow:none;
+      backdrop-filter:none;-webkit-backdrop-filter:none;
+      font-size:.84rem;line-height:1.35;font-weight:760;
+      text-align:center;color:var(--muted);
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
     }
-    .qol-session-strip strong{color:var(--text);white-space:nowrap}
-    .qol-session-track{height:6px;border-radius:999px;background:var(--surface3);overflow:hidden}
-    .qol-session-fill{height:100%;border-radius:inherit;background:var(--accent);transition:width .2s ease}
-    .qol-session-ref{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34vw}
+    .qol-session-ref{display:block;max-width:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .qol-repeat-hint{font-size:.72rem;font-weight:700;opacity:.72}
-    @media(max-width:560px){.qol-session-strip{grid-template-columns:auto 1fr}.qol-session-ref{grid-column:1/-1;max-width:none}.qol-session-track{min-width:80px}}
   `;
   document.head.appendChild(style);
 
@@ -60,7 +54,7 @@
     for (const row of rows) {
       row.classList.add('qol-rating-ready');
       row.tabIndex = 0;
-      row.setAttribute('aria-label','Choose recall rating: 1 Again, 2 Hard, 3 Good, 4 Easy');
+      row.setAttribute('aria-label','Choose recall rating: 1 Again, 2 Hard, 3 Good, 4 Easy. Press Enter to continue with Good when available.');
     }
     if (!rows.length || performance.now() - lastPointerAt < 220) return;
     const active = document.activeElement;
@@ -81,17 +75,28 @@
     let strip = document.getElementById('qol-session-strip');
     const active = typeof session === 'object' && Array.isArray(session.tasks) && session.tasks.length > 0 && session.index < session.tasks.length;
     if (!active) { strip?.remove(); return; }
-    const total = session.tasks.length, current = Math.min(total, session.index + 1);
-    let reference = '';
-    try { reference = typeof currentVerse === 'function' ? (currentVerse()?.reference || '') : ''; } catch (_) {}
-    const signature = `${current}|${total}|${reference}`;
+
+    let label = '';
+    let mode = '';
+    try {
+      const task = typeof currentTask === 'function' ? currentTask() : null;
+      mode = task?.mode || '';
+      label = mode === 'reference' ? 'Which verse?' : (typeof currentVerse === 'function' ? (currentVerse()?.reference || '') : '');
+    } catch (_) {}
+    if (!label) label = 'Study';
+
+    const signature = `${session.index}|${mode}|${label}`;
     if (!strip) {
-      strip = document.createElement('div'); strip.id='qol-session-strip'; strip.className='qol-session-strip';
-      strip.setAttribute('role','status'); strip.setAttribute('aria-live','polite'); root.prepend(strip);
+      strip = document.createElement('div');
+      strip.id='qol-session-strip';
+      strip.className='qol-session-strip';
+      strip.setAttribute('role','status');
+      strip.setAttribute('aria-live','polite');
+      root.prepend(strip);
     }
     if (strip.dataset.signature === signature) return;
     strip.dataset.signature = signature;
-    strip.innerHTML = `<strong>Task ${current} of ${total}</strong><div class="qol-session-track" aria-hidden="true"><div class="qol-session-fill" style="width:${Math.round(100*current/total)}%"></div></div><span class="qol-session-ref">${reference}</span>`;
+    strip.textContent = label;
   };
 
   const lastRepeatTarget = () => {
@@ -138,7 +143,7 @@
   },true);
 
   const bestStudyTarget = () => {
-    const selectors = ['.rating-row.qol-rating-ready','#typing-answer:not(:disabled)','#initials-answer:not(:disabled)','#reference-answer:not(:disabled)','.cloze-input:not(:disabled)','[data-action="reveal"]:not(:disabled)','[data-action="next-phrase"]:not(:disabled)','.learn-check:not(:disabled)','[data-action="speak"]:not(:disabled)','[data-action="complete-listen"]:not(:disabled)','[data-action="flashcard-next"]:not(:disabled)','.session-complete .btn.primary:not(:disabled)','.session-complete [data-qol-repeat-verse]:not(:disabled)','#view-study .btn.primary:not(:disabled)'];
+    const selectors = ['.rating-row.qol-rating-ready','#typing-answer:not(:disabled)','#initials-answer:not(:disabled)','#reference-answer:not(:disabled)','.cloze-input:not(:disabled)','[data-action="reveal"]:not(:disabled)','[data-action="next-phrase"]:not(:disabled)','[data-patch-action="continue-build"]:not(:disabled)','.learn-check:not(:disabled)','[data-action="speak"]:not(:disabled)','[data-action="complete-listen"]:not(:disabled)','[data-action="flashcard-next"]:not(:disabled)','.session-complete .btn.primary:not(:disabled)','.session-complete [data-qol-repeat-verse]:not(:disabled)','#view-study .btn.primary:not(:disabled)'];
     for (const selector of selectors) {
       const candidates=[...document.querySelectorAll(selector)].filter(visibleEnabled);
       if(!candidates.length) continue;
@@ -175,6 +180,17 @@
     return [...complete.querySelectorAll('[data-qol-repeat-verse],button:not(:disabled)')].filter(visibleEnabled).find(button=>button.hasAttribute('data-qol-repeat-verse')||/repeat|same verse/i.test(button.textContent||''))||null;
   };
 
+  const continueFromRating = row => {
+    if (!row) return false;
+    const enabled = [...row.querySelectorAll('.rate-btn:not(:disabled)')].filter(visibleEnabled);
+    if (!enabled.length) return false;
+    const good = enabled.find(button => button.dataset.rate === '2');
+    const button = good || enabled[enabled.length - 1];
+    button.focus({preventScroll:true});
+    button.click();
+    return true;
+  };
+
   document.addEventListener('keydown',event=>{
     if(event.defaultPrevented||event.isComposing||event.altKey||event.ctrlKey||event.metaKey)return;
     if((event.key==='r'||event.key==='R')&&!isEditable(document.activeElement)){
@@ -185,7 +201,9 @@
       if(button){event.preventDefault();event.stopImmediatePropagation();button.focus({preventScroll:true});button.click();return}
     }
     if(event.key!=='Enter'||event.shiftKey)return;
-    if(event.target?.matches?.('.rating-row.qol-rating-ready')){event.preventDefault();event.stopImmediatePropagation();return}
+    if(event.target?.matches?.('.rating-row.qol-rating-ready')){
+      event.preventDefault();event.stopImmediatePropagation();continueFromRating(event.target);return;
+    }
     const target=event.target; let selector='';
     if(target?.id==='typing-answer')selector='[data-action="check-typing"]';
     else if(target?.id==='initials-answer')selector='[data-action="check-initials"]';
