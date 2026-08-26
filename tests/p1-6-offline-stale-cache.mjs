@@ -37,8 +37,18 @@ await page.addInitScript(()=>{
 await page.goto(APP,{waitUntil:'domcontentloaded',timeout:45000});
 await page.waitForFunction(()=>Boolean(window.TMSVersions?.buildAppSource),null,{timeout:15000});
 await page.waitForSelector('#app-frame.ready',{timeout:45000});
-const workerReady=await ensureServiceWorker(page);
+let workerReady=await ensureServiceWorker(page);
+if(!workerReady.controlled){
+  // A newly registered worker may be active before it controls the document.
+  // Reload once while online so the subsequent offline boot checks are genuine
+  // service-worker navigations instead of browser network failures.
+  await page.reload({waitUntil:'domcontentloaded',timeout:45000});
+  await page.waitForFunction(()=>Boolean(window.TMSVersions?.buildAppSource),null,{timeout:15000});
+  await page.waitForSelector('#app-frame.ready',{timeout:45000});
+  workerReady=await ensureServiceWorker(page);
+}
 pass(Boolean(workerReady.scope),'Service worker is ready for P1-6 PWA checks',JSON.stringify(workerReady));
+pass(workerReady.controlled,'Page is controlled before P1-6 offline reloads',JSON.stringify(workerReady));
 
 const manifest=await page.evaluate(async()=>{
   const source=await fetch('app.html',{cache:'no-store'}).then(r=>r.text());
