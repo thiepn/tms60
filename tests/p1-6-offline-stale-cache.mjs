@@ -16,7 +16,9 @@ await page.addInitScript(()=>{
   localStorage.setItem('tms60-onboarding-v2','1');
   localStorage.setItem('tms60-onboarding-v3','1');
   localStorage.setItem('tms60-ui-language-v1','en');
-  localStorage.setItem('tms60-active-translation-v1','esv');
+  // Seed ESV only on the first navigation. Later test reloads deliberately set
+  // another active translation and must not be overwritten by this init hook.
+  if(!localStorage.getItem('tms60-active-translation-v1'))localStorage.setItem('tms60-active-translation-v1','esv');
 });
 
 await page.goto(APP,{waitUntil:'domcontentloaded',timeout:45000});
