@@ -1,6 +1,47 @@
 'use strict';
-const CACHE='tms60-stability28-2026-08-26';
+const CACHE='tms60-stability29-2026-08-26';
 const CORE=['./','./index.html','./app.html','./translations.js','./niv-service.json','./enhancements.js','./enhancements-legacy.js','./rc3-hardening.js','./language-switch-hardening.js','./guided-learning-chain.js','./qol-fast-recall.js','./qol-cloze-helpers.js','./qol-word-navigation.js','./ux-patch.js','./enhancements-core.js','./localization-runtime.js','./localization-completion.js','./favicon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
+const STATIC_ASSETS=new Set(['./favicon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'].map(url=>new URL(url,self.location.href).pathname));
+
+async function cacheSuccessful(request,response,event){
+  if(!response||!response.ok||response.type==='opaque')return;
+  const write=caches.open(CACHE).then(cache=>cache.put(request,response.clone())).catch(()=>{});
+  if(event)event.waitUntil(write);else await write;
+}
+
+async function cachedResponse(request){
+  const cache=await caches.open(CACHE);
+  return cache.match(request);
+}
+
+async function networkFirst(request,event,{navigation=false}={}){
+  try{
+    const response=await fetch(request);
+    cacheSuccessful(request,response,event);
+    return response;
+  }catch(_){
+    const hit=await cachedResponse(request);
+    if(hit)return hit;
+    if(navigation){
+      const shell=await cachedResponse(new Request(new URL('./index.html',self.location.href)));
+      if(shell)return shell;
+    }
+    return Response.error();
+  }
+}
+
+async function cacheFirst(request,event){
+  const hit=await cachedResponse(request);
+  if(hit)return hit;
+  try{
+    const response=await fetch(request);
+    cacheSuccessful(request,response,event);
+    return response;
+  }catch(_){
+    return Response.error();
+  }
+}
+
 self.addEventListener('install',event=>{
   event.waitUntil((async()=>{
     const cache=await caches.open(CACHE);
@@ -18,12 +59,8 @@ self.addEventListener('activate',event=>{
 self.addEventListener('fetch',event=>{
   const req=event.request;if(req.method!=='GET')return;
   const url=new URL(req.url);if(url.origin!==location.origin)return;
-  event.respondWith(fetch(req,{cache:'no-store'}).then(res=>{
-    if(res&&res.ok){const copy=res.clone();caches.open(CACHE).then(cache=>cache.put(req,copy))}
-    return res;
-  }).catch(async()=>{
-    const hit=await caches.match(req);if(hit)return hit;
-    if(req.mode==='navigate')return caches.match('./index.html');
-    return Response.error();
-  }));
+  if(req.headers.has('range')){event.respondWith(fetch(req));return}
+  if(req.mode==='navigate'){event.respondWith(networkFirst(req,event,{navigation:true}));return}
+  if(STATIC_ASSETS.has(url.pathname)){event.respondWith(cacheFirst(req,event));return}
+  event.respondWith(networkFirst(req,event));
 });
