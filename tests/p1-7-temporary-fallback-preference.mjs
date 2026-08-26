@@ -10,6 +10,26 @@ const page=await context.newPage();
 const failures=[];
 const pass=(ok,name,detail='')=>{console.log(`${ok?'PASS':'FAIL'} ${name}${detail?' — '+detail:''}`);if(!ok)failures.push({name,detail})};
 
+async function ensureServiceWorker(page,timeout=15000){
+  return page.evaluate(async timeout=>{
+    if(!('serviceWorker'in navigator))throw new Error('Service workers are unavailable in this browser context.');
+    let registration=await navigator.serviceWorker.getRegistration();
+    if(!registration)registration=await navigator.serviceWorker.register('sw.js');
+    const ready=await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('Service worker did not become ready in time.')),timeout))
+    ]);
+    if(!navigator.serviceWorker.controller){
+      await new Promise(resolve=>{
+        const timer=setTimeout(resolve,3000);
+        navigator.serviceWorker.addEventListener('controllerchange',()=>{clearTimeout(timer);resolve()},{once:true});
+      });
+      if(!navigator.serviceWorker.controller)location.reload();
+    }
+    return {scope:ready.scope,controlled:Boolean(navigator.serviceWorker.controller)};
+  },timeout);
+}
+
 // Do not initialize the Bible-version preference here: addInitScript also runs
 // for srcdoc child frames, so touching VERSION_KEY in this hook could mask or
 // manufacture the exact persistence bug this regression is meant to detect.
@@ -22,7 +42,12 @@ await page.addInitScript(()=>{
 await page.goto(APP,{waitUntil:'domcontentloaded',timeout:45000});
 await page.waitForFunction(()=>Boolean(window.TMSVersions?.buildAppSource),null,{timeout:15000});
 await page.waitForSelector('#app-frame.ready',{timeout:45000});
-await page.evaluate(async()=>{if('serviceWorker'in navigator)await navigator.serviceWorker.ready;});
+const workerReady=await ensureServiceWorker(page);
+if(!workerReady.controlled){
+  await page.waitForLoadState('domcontentloaded',{timeout:15000}).catch(()=>{});
+  await page.waitForSelector('#app-frame.ready',{timeout:45000});
+}
+pass(Boolean(await page.evaluate(()=>navigator.serviceWorker.controller)),'Page is controlled before P1-7 fallback reloads',JSON.stringify(workerReady));
 
 // Simulate a saved NIV preference with no usable local NIV text, followed by a
 // temporary server failure during startup. The shell may use ESV for this boot,
