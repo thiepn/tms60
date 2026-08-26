@@ -61,6 +61,7 @@ jobs:
             tests/qol-regression-v2.mjs
             tests/guided-due-regression.mjs
             tests/p2-1-study-observer-scope.mjs
+            tests/p2-2-app-bridge-observer-scope.mjs
             tests/rc1-bible-gate.mjs
             tests/rc1-localization-gate.mjs
             tests/rc1-final-gates.mjs
@@ -86,6 +87,7 @@ jobs:
             tests/qol-regression-v2.mjs
             tests/guided-due-regression.mjs
             tests/p2-1-study-observer-scope.mjs
+            tests/p2-2-app-bridge-observer-scope.mjs
             tests/rc1-bible-gate.mjs
             tests/rc1-localization-gate.mjs
             tests/rc1-final-gates.mjs
