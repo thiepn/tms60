@@ -8,7 +8,7 @@
 (() => {
   if (window.__TMS60_P25_RUNTIME_TRANSLATION__) return;
 
-  const MARKER = '1.0.0';
+  const MARKER = '1.0.1';
   const volatileStates = new Map();
   let currentMeta = {
     id: '',
@@ -71,6 +71,27 @@
     setCopyright(meta.copyright);
   }
 
+  function requestParentLocalization() {
+    // Localization is deliberately parent-owned. The iframe storage guard makes
+    // the legacy in-frame localization layer see English, so a runtime render
+    // must explicitly wake the parent incremental localizer after it recreates
+    // source-language UI text. This inert BODY click is the same safe mechanism
+    // used by language-switch-hardening.js and activates no navigation/action.
+    try {
+      document.body?.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: false,
+        view: window
+      }));
+    } catch (_) {}
+  }
+
+  function scheduleParentLocalization() {
+    queueMicrotask(requestParentLocalization);
+    requestAnimationFrame(requestParentLocalization);
+    setTimeout(requestParentLocalization, 120);
+  }
+
   function persistentRawExists(key) {
     try { return localStorage.getItem(key) != null; } catch (_) { return false; }
   }
@@ -124,6 +145,7 @@
     currentMeta = normalizeMeta(meta);
     setVisibleTranslationMeta(currentMeta);
     window.__TMS60_ACTIVE_TRANSLATION__ = Object.freeze({ ...currentMeta });
+    scheduleParentLocalization();
     return inspect();
   }
 
@@ -159,6 +181,7 @@
       setVisibleTranslationMeta(currentMeta);
       window.__TMS60_ACTIVE_TRANSLATION__ = Object.freeze({ ...currentMeta });
       document.dispatchEvent(new CustomEvent('tms60:translation-switched', { detail: { id: currentMeta.id, short: currentMeta.short } }));
+      scheduleParentLocalization();
       return inspect();
     } catch (error) {
       VERSES.splice(0, VERSES.length, ...previous.verses);
@@ -175,6 +198,7 @@
       renderForView(previousView);
       setVisibleTranslationMeta(currentMeta);
       window.__TMS60_ACTIVE_TRANSLATION__ = Object.freeze({ ...currentMeta });
+      scheduleParentLocalization();
       throw error;
     }
   }
