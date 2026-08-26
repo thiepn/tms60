@@ -1,9 +1,10 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_CLOZE_HELPERS_QOL__) return;
-  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.6.0';
+  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.7.0';
 
   const EMPTY_GUARD_KEY = 'tms60-qol-empty-advance-guard-v1';
+  const MOBILE_MODE = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
 
   const style = document.createElement('style');
   style.id = 'tms60-cloze-helper-style';
@@ -24,7 +25,7 @@
     return cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0;
   };
 
-  const mobileMode = () => matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  const mobileMode = () => MOBILE_MODE;
   const emptyGuardEnabled = () => {
     try { const value=localStorage.getItem(EMPTY_GUARD_KEY); return value == null ? true : value !== '0'; }
     catch (_) { return true; }
@@ -32,15 +33,18 @@
   const normalizeWord = value => String(value || '').toLocaleLowerCase('en-US').replace(/[’]/g,"'").trim();
 
   let lastPointerAt = 0;
+  let mobilePositionToken = 0;
   document.addEventListener('pointerdown',()=>{lastPointerAt=performance.now();},true);
 
-  const clozeInputs = () => [...document.querySelectorAll('.cloze-input:not(:disabled)')].filter(visibleEnabled);
-  const allClozeInputs = () => [...document.querySelectorAll('.cloze-input')].filter(el=>el.getClientRects().length>0);
+  const studyRoot = () => document.getElementById('view-study');
+  const clozeInputs = () => [...(studyRoot()?.querySelectorAll('.cloze-input:not(:disabled)') || [])].filter(visibleEnabled);
+  const allClozeInputs = () => [...(studyRoot()?.querySelectorAll('.cloze-input') || [])].filter(el=>el.getClientRects().length>0);
 
   const positionMobileInput = input => {
     if (!input || !mobileMode()) return;
+    const token = ++mobilePositionToken;
     const move = () => {
-      if (document.activeElement !== input || !document.contains(input)) return;
+      if (token !== mobilePositionToken || document.activeElement !== input || !document.contains(input)) return;
       const scroller = document.querySelector('.content');
       if (!scroller || scroller.scrollHeight <= scroller.clientHeight) {
         input.scrollIntoView({block:'center',inline:'nearest',behavior:'auto'});
@@ -82,16 +86,13 @@
     }
     const inputs = clozeInputs();
     const active = document.activeElement;
-    // Do not yank focus back to the first error after the user navigates to a
-    // later filled error. Only establish initial focus when no editable blank
-    // currently owns focus.
     if (inputs[0] && !inputs.includes(active)) setTimeout(()=>focusClozeInput(inputs[0]),35);
   };
 
   const injectFixErrorsButton = () => {
     if (typeof currentTask === 'function' && currentTask()?.mode !== 'cloze') return;
     const checked = typeof session === 'object' && session?.exercise?.checked;
-    const actions = document.querySelector('.cloze-line')?.parentElement?.querySelector('.answer-actions');
+    const actions = studyRoot()?.querySelector('.cloze-line')?.parentElement?.querySelector('.answer-actions');
     if (!checked || !actions) return;
     const errors = errorIndicesFromDom();
     if (!errors.length) {
@@ -112,9 +113,10 @@
   };
 
   const updateCounter = () => {
-    const line = document.querySelector('.cloze-line');
+    const root = studyRoot();
+    const line = root?.querySelector('.cloze-line');
     const inputs = clozeInputs();
-    let counter = document.getElementById('qol-cloze-counter');
+    let counter = root?.querySelector('#qol-cloze-counter');
     if (!line || !inputs.length) {
       counter?.remove();
       return;
@@ -140,7 +142,7 @@
   const injectSettingsToggle = () => {
     const view = document.getElementById('view-settings');
     const stack = view?.querySelector('.settings-grid .stack');
-    if (!stack || document.getElementById('qol-recall-controls-card')) return;
+    if (!stack || view.querySelector('#qol-recall-controls-card')) return;
     const card = document.createElement('article');
     card.id = 'qol-recall-controls-card';
     card.className = 'card flat';
@@ -155,7 +157,6 @@
       applyFixOnlyMode();
       updateCounter();
       injectFixErrorsButton();
-      injectSettingsToggle();
       if (performance.now() - lastPointerAt < 220) return;
       const inputs = clozeInputs();
       if (!inputs.length) return;
@@ -163,9 +164,6 @@
       if (typeof session === 'object' && session?.exercise?.checked) return;
 
       const active = document.activeElement;
-      // Once the user is inside any editable cloze box, never redirect them to
-      // the first empty answer. Sequential Space/Tab/Backspace navigation owns
-      // focus, and filled boxes remain valid destinations.
       if (inputs.includes(active)) {
         updateCounter();
         return;
@@ -222,16 +220,14 @@
     if (event.target?.matches?.('.cloze-input:not(:disabled)')) updateCounter();
   },true);
 
-  const bind = () => {
-    const root = document.getElementById('view-study');
-    if (root && root.dataset.qolClozeResumeObserved !== '1') {
-      root.dataset.qolClozeResumeObserved = '1';
-      new MutationObserver(refreshClozeHelpers).observe(root,{childList:true,subtree:true});
-      refreshClozeHelpers();
-    }
-    injectSettingsToggle();
-  };
+  const root = studyRoot();
+  if (root && root.dataset.qolClozeResumeObserved !== '1') {
+    root.dataset.qolClozeResumeObserved = '1';
+    new MutationObserver(refreshClozeHelpers).observe(root,{childList:true,subtree:true});
+    refreshClozeHelpers();
+  }
 
-  bind();
-  new MutationObserver(bind).observe(document.body,{childList:true,subtree:true});
+  const settingsRoot = document.getElementById('view-settings');
+  if (settingsRoot) new MutationObserver(injectSettingsToggle).observe(settingsRoot,{childList:true,subtree:true});
+  injectSettingsToggle();
 })();
