@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_LANGUAGE_SWITCH_HARDENING__) return;
-  window.__TMS60_LANGUAGE_SWITCH_HARDENING__ = '1.7.0';
+  window.__TMS60_LANGUAGE_SWITCH_HARDENING__ = '1.7.1';
 
   const KEY = 'tms60-ui-language-v1';
   const SUPPORTED = new Set(['en', 'de', 'ko']);
@@ -73,17 +73,18 @@
   function installIdempotentActiveNavigation() {
     if (window.__TMS60_IDEMPOTENT_ACTIVE_NAV__ || typeof switchView !== 'function') return;
     const coreSwitchView = switchView;
-    window.__TMS60_IDEMPOTENT_ACTIVE_NAV__ = '1.0.0';
+    window.__TMS60_IDEMPOTENT_ACTIVE_NAV__ = '1.0.1';
     switchView = function(view) {
       const current = document.documentElement.dataset.view;
       const activeView = current === view &&
         document.getElementById(`view-${view}`)?.classList.contains('active');
 
-      if (activeView) {
-        // Re-entering an already active view only replaces DOM that is already
-        // current. In localized views that redundant replacement forced parent
-        // localization layers to translate/recreate the same subtree again.
-        // Preserve the current subtree; real view changes still use core logic.
+      // Study is stateful: starting a manual/smart/guided session often changes
+      // session state first and then calls switchView('study') while Study is
+      // already the active view. Suppressing that render leaves the chooser DOM
+      // on screen and prevents the new exercise (including Cloze) from appearing.
+      // Other same-view navigation can still use the idempotent fast path.
+      if (activeView && view !== 'study') {
         try {
           const drawerWasOpen = document.getElementById('sidebar')?.classList.contains('open');
           if (typeof setSidebarOpen === 'function') setSidebarOpen(false, drawerWasOpen);
