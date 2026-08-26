@@ -7,6 +7,7 @@
 
   let lastTaskId = null;
   let compactScheduled = false;
+  let settingsPatchScheduled = false;
 
   function task() {
     try { return typeof currentTask === 'function' ? currentTask() : null; } catch (_) { return null; }
@@ -14,6 +15,23 @@
 
   function verse() {
     try { return typeof currentVerse === 'function' ? currentVerse() : null; } catch (_) { return null; }
+  }
+
+  function shell() {
+    try { return window.parent !== window ? window.parent : window; } catch (_) { return window; }
+  }
+
+  function versionDefinitions() {
+    try {
+      const defs = shell().TMSVersions?.list?.();
+      return Array.isArray(defs) ? defs.filter(def => def?.available) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function activeVersionId() {
+    try { return String(localStorage.getItem('tms60-active-translation-v1') || ''); } catch (_) { return ''; }
   }
 
   function syncShellThemeFromApp(syncParent = false) {
@@ -25,10 +43,6 @@
       localStorage.setItem(SHELL_THEME_KEY, JSON.stringify({ appearance, accent }));
     } catch (_) {}
 
-    // index.html owns the outer shell theme. The top quick-toggle lives inside
-    // the iframe, so explicitly keep the shell's in-memory selection aligned.
-    // Otherwise the shell can re-apply its previous mode on the next reload or
-    // translation switch even though the inner app saved the new mode correctly.
     if (!syncParent || window.parent === window) return;
     try {
       const parentDoc = window.parent.document;
@@ -55,13 +69,112 @@
       .prompt.prompt-compact{padding:8px 0 14px}
       .prompt.prompt-compact .prompt-help{margin-top:0}
       .session-end-bottom{margin-top:12px}
+      .translation-picker-grid{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:12px;align-items:end}
+      .translation-license-note{position:static!important;inset:auto!important;z-index:auto!important;display:block!important;max-width:none!important;margin:12px 0 0!important;padding:10px 11px!important;border:1px solid var(--border)!important;border-radius:11px!important;background:var(--surface2)!important;color:var(--muted)!important;font:inherit!important;font-size:.72rem!important;line-height:1.45!important;pointer-events:auto!important;box-shadow:none!important}
       @media(max-width:760px){
         .prompt.prompt-compact{padding:5px 0 12px}
         #view-study .study-shell{gap:10px}
         #view-study .study-card{min-height:0}
+        .translation-picker-grid{grid-template-columns:1fr}
       }
     `;
     document.head.appendChild(style);
+  }
+
+  function patchTranslationSettings() {
+    settingsPatchScheduled = false;
+    addStyles();
+
+    const card = document.querySelector('[data-shell-version-settings]');
+    const copyright = document.getElementById('translation-copyright');
+
+    // Licensed translations may require the attribution to remain visible, but
+    // it must never be a fixed overlay over the mobile navigation.
+    if (copyright) {
+      copyright.classList.add('translation-license-note');
+      copyright.removeAttribute('style');
+      copyright.setAttribute('role', 'note');
+      copyright.setAttribute('aria-label', 'Bible translation copyright');
+      if (card && copyright.parentElement !== card) card.appendChild(copyright);
+    }
+
+    if (!card || card.dataset.languagePickerInstalled === '1') return;
+    const bibleSelect = card.querySelector('#shell-version-select');
+    const oldField = bibleSelect?.closest('.field');
+    const originalHelp = oldField?.querySelector('.help') || null;
+    if (!bibleSelect || !oldField) return;
+
+    const defs = versionDefinitions();
+    if (!defs.length) return;
+    const currentId = activeVersionId() || bibleSelect.value;
+    const current = defs.find(def => def.id === currentId) || defs[0];
+    const languages = [...new Set(defs.map(def => def.language).filter(Boolean))];
+    if (!languages.length) return;
+
+    const grid = document.createElement('div');
+    grid.className = 'translation-picker-grid';
+    grid.dataset.patchLanguageControls = '1';
+
+    const languageField = document.createElement('div');
+    languageField.className = 'field';
+    const languageLabel = document.createElement('label');
+    languageLabel.htmlFor = 'shell-language-select';
+    languageLabel.textContent = 'Language';
+    const languageSelect = document.createElement('select');
+    languageSelect.id = 'shell-language-select';
+    for (const language of languages) {
+      const option = document.createElement('option');
+      option.value = language;
+      option.textContent = language;
+      option.selected = language === current.language;
+      languageSelect.appendChild(option);
+    }
+    languageField.append(languageLabel, languageSelect);
+
+    const bibleField = document.createElement('div');
+    bibleField.className = 'field';
+    const bibleLabel = document.createElement('label');
+    bibleLabel.htmlFor = 'shell-version-select';
+    bibleLabel.textContent = 'Bible version';
+    bibleField.append(bibleLabel, bibleSelect);
+
+    const fillVersions = language => {
+      const matching = defs.filter(def => def.language === language);
+      const previous = bibleSelect.value;
+      bibleSelect.replaceChildren();
+      for (const def of matching) {
+        const option = document.createElement('option');
+        option.value = def.id;
+        option.textContent = `${def.name} (${def.short})`;
+        bibleSelect.appendChild(option);
+      }
+      if (matching.some(def => def.id === currentId)) bibleSelect.value = currentId;
+      else if (matching.some(def => def.id === previous)) bibleSelect.value = previous;
+      else if (matching[0]) bibleSelect.value = matching[0].id;
+      return matching;
+    };
+
+    fillVersions(current.language);
+    grid.append(languageField, bibleField);
+    oldField.replaceWith(grid);
+    if (originalHelp) {
+      originalHelp.style.marginTop = '8px';
+      grid.after(originalHelp);
+    }
+    card.dataset.languagePickerInstalled = '1';
+
+    languageSelect.addEventListener('change', async () => {
+      const matching = fillVersions(languageSelect.value);
+      const next = matching[0];
+      if (!next || next.id === activeVersionId()) return;
+      try { await shell().activateVersion?.(next.id); } catch (_) {}
+    });
+  }
+
+  function scheduleSettingsPatch() {
+    if (settingsPatchScheduled) return;
+    settingsPatchScheduled = true;
+    requestAnimationFrame(patchTranslationSettings);
   }
 
   function patchBuild(root, currentTask, currentVerse) {
@@ -113,8 +226,6 @@
       scrollSessionTop();
     }
 
-    // The exercise itself is the focus. Remove duplicated session chrome and
-    // every prompt-level reference that can leak a reference-recall answer.
     root.querySelector('.page-head')?.remove();
     root.querySelector('.study-toolbar')?.remove();
     root.querySelector('.study-meta')?.remove();
@@ -154,7 +265,6 @@
   document.addEventListener('click', event => {
     const themeAction = event.target.closest?.('[data-action]')?.dataset.action;
     if (themeAction === 'toggle-appearance') {
-      // Run after the app's own click handler has changed data-mode.
       setTimeout(() => syncShellThemeFromApp(true), 0);
     } else if (themeAction === 'set-appearance' || themeAction === 'set-accent') {
       setTimeout(() => syncShellThemeFromApp(false), 0);
@@ -203,7 +313,13 @@
     }
   }, true);
 
-  const root = document.getElementById('view-study');
-  if (root) new MutationObserver(scheduleCompact).observe(root, { childList: true, subtree: true });
+  const studyRoot = document.getElementById('view-study');
+  if (studyRoot) new MutationObserver(scheduleCompact).observe(studyRoot, { childList: true, subtree: true });
+
+  const settingsRoot = document.getElementById('view-settings');
+  if (settingsRoot) new MutationObserver(scheduleSettingsPatch).observe(settingsRoot, { childList: true, subtree: true });
+  new MutationObserver(scheduleSettingsPatch).observe(document.body, { childList: true, subtree: true });
+
   scheduleCompact();
+  scheduleSettingsPatch();
 })();
