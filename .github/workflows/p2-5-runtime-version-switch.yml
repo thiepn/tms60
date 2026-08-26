@@ -1,0 +1,41 @@
+name: P2-5 Runtime Version Switch
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'app.html'
+      - 'translations.js'
+      - 'p2-5-source-prep.js'
+      - 'p2-5-shell-runtime.js'
+      - 'runtime-translation-switch.js'
+      - 'ux-patch.js'
+      - 'enhancements-core.js'
+      - 'language-switch-hardening.js'
+      - 'localization-runtime.js'
+      - 'localization-completion.js'
+      - 'sw.js'
+      - 'tests/p2-5-runtime-version-switch.mjs'
+      - 'tests/wait-for-pages-deployment.mjs'
+      - '.github/workflows/p2-5-runtime-version-switch.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  runtime-version-switch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Wait for exact GitHub Pages deployment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tests/wait-for-pages-deployment.mjs
+      - run: node tests/p2-5-runtime-version-switch.mjs
