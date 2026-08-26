@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_CLOZE_HELPERS_QOL__) return;
-  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.5.1';
+  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.6.0';
 
   const EMPTY_GUARD_KEY = 'tms60-qol-empty-advance-guard-v1';
 
@@ -80,8 +80,12 @@
       input.disabled = !editable;
       input.classList.toggle('qol-locked-correct',!editable);
     }
-    const first = clozeInputs()[0];
-    if (first) setTimeout(()=>focusClozeInput(first),35);
+    const inputs = clozeInputs();
+    const active = document.activeElement;
+    // Do not yank focus back to the first error after the user navigates to a
+    // later filled error. Only establish initial focus when no editable blank
+    // currently owns focus.
+    if (inputs[0] && !inputs.includes(active)) setTimeout(()=>focusClozeInput(inputs[0]),35);
   };
 
   const injectFixErrorsButton = () => {
@@ -158,13 +162,17 @@
       if (typeof currentTask === 'function' && currentTask()?.mode !== 'cloze') return;
       if (typeof session === 'object' && session?.exercise?.checked) return;
 
+      const active = document.activeElement;
+      // Once the user is inside any editable cloze box, never redirect them to
+      // the first empty answer. Sequential Space/Tab/Backspace navigation owns
+      // focus, and filled boxes remain valid destinations.
+      if (inputs.includes(active)) {
+        updateCounter();
+        return;
+      }
+
       const firstEmpty = inputs.find(input => !String(input.value || '').trim());
       const target = firstEmpty || inputs[inputs.length - 1];
-      const active = document.activeElement;
-      if (active === target) return;
-      if (active?.matches?.('.cloze-input:not(:disabled)') && !firstEmpty) return;
-      if (active?.matches?.('.cloze-input:not(:disabled)') && !String(active.value || '').trim()) return;
-
       focusClozeInput(target);
       updateCounter();
     }, 70);
