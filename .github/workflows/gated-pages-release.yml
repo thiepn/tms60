@@ -101,9 +101,14 @@ jobs:
 
           for test_file in "${GATED_TESTS[@]}"; do
             echo "::group::$test_file"
-            if ! node "$test_file"; then
+            if ! timeout --signal=TERM --kill-after=10s 180s node "$test_file"; then
+              status=$?
               failed=1
-              echo "FAILED: $test_file"
+              if [ "$status" -eq 124 ]; then
+                echo "TIMED OUT after 180s: $test_file"
+              else
+                echo "FAILED: $test_file"
+              fi
             fi
             echo '::endgroup::'
           done
