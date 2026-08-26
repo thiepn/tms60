@@ -23,7 +23,7 @@ h1{margin:22px 0 7px;font-size:clamp(1.65rem,4vw,2.15rem);line-height:1.08;lette
 .accents{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.accent{min-height:67px;border-color:rgba(255,255,255,.12);background:#17191d;color:#d5d9df;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;font-size:.78rem}.accent.active{border-color:#f3f5f7;box-shadow:0 0 0 2px rgba(255,255,255,.14);color:#fff}.swatch{width:25px;height:25px;border-radius:50%;background:var(--swatch);box-shadow:0 0 0 2px #17191d,0 0 0 3px rgba(255,255,255,.25)}
 .versions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.version-choice{min-height:88px;text-align:left;border-color:rgba(255,255,255,.12);background:#17191d;padding:13px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;align-content:center}.version-choice strong{color:#eef1f5;font-size:.94rem}.version-choice small{grid-column:1/-1;color:#929aa5;font-weight:560}.version-choice .lang{font-size:.69rem;padding:4px 7px;border-radius:999px;background:#262a30;color:#c7ccd3}.version-choice.active{border-color:#f3f5f7;box-shadow:0 0 0 2px rgba(255,255,255,.13)}.version-choice:disabled{cursor:not-allowed;opacity:.56}.version-choice:disabled strong{color:#c3c8cf}.pending{color:#d9b974!important}
 .legal-note{margin-top:12px;font-size:.76rem;color:#7f8791;line-height:1.45}.actions{display:flex;justify-content:flex-end;margin-top:22px}.start{border:1px solid #f3f5f7;border-radius:13px;background:#f3f5f7;color:#101216;min-height:46px;padding:10px 18px;font:inherit;font-weight:800;cursor:pointer}.start:hover{background:#fff}.start:disabled{opacity:.55;cursor:wait}
-@media(max-width:560px){.onboarding{padding:20px;border-radius:20px}.accents{grid-template-columns:repeat(2,minmax(0,1fr))}.accent{min-height:54px;flex-direction:row;justify-content:flex-start}.versions{grid-template-columns:1fr}.actions .start{width:100%}}
+@media(max-width:560px){.onboarding{padding:20px;border-radius:20px}.accents{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.accent{min-height:54px;flex-direction:row;justify-content:flex-start}.versions{grid-template-columns:1fr}.actions .start{width:100%}}
 @media(prefers-reduced-motion:reduce){#app-frame{transition:none}}
 </style>
 </head>
@@ -163,7 +163,7 @@ function resetShellState(){
   selected={appearance:'dark',accent:'neutral'};selectedVersion='esv';activeVersion='esv';saveTheme();saveActiveVersion('esv');
   loadVersion('esv').then(openOnboarding).catch(()=>openOnboarding());
 }
-async function loadVersion(id){
+async function loadVersion(id,{persist=true}={}){
   const serial=++loadSerial;
   const def=getVersion(id);
   if(!def.available)throw new Error(`${def.name} is not available yet because its authorized verse-text source has not been connected.`);
@@ -178,7 +178,7 @@ async function loadVersion(id){
       clearTimeout(timer);
       try{
         const doc=frame.contentDocument;if(!doc)throw new Error('The memorization app could not be accessed.');
-        activeVersion=id;selectedVersion=id;saveActiveVersion(id);attachAppBridge(doc);applySelectedTheme();frame.classList.add('ready');boot.classList.add('hidden');syncChoices();resolve();
+        activeVersion=id;selectedVersion=id;attachAppBridge(doc);applySelectedTheme();frame.classList.add('ready');boot.classList.add('hidden');if(persist)saveActiveVersion(id);syncChoices();resolve();
       }catch(error){reject(error)}
     };
     frame.srcdoc=built.source;
@@ -200,8 +200,14 @@ finish.addEventListener('click',async()=>{
 });
 
 (async()=>{
-  selected=readStoredTheme();saveTheme();activeVersion=readActiveVersion();selectedVersion=activeVersion;syncChoices();
-  try{await loadVersion(activeVersion)}catch(error){console.error(error);showNotice(`Could not load ${getVersion(activeVersion).name}; falling back to ESV.`,'error',8000);activeVersion='esv';selectedVersion='esv';saveActiveVersion('esv');try{await loadVersion('esv')}catch(fallback){boot.textContent='TMS 60 could not be loaded.';console.error(fallback);return}}
+  selected=readStoredTheme();saveTheme();
+  const preferredVersion=readActiveVersion();
+  activeVersion=preferredVersion;selectedVersion=preferredVersion;syncChoices();
+  try{await loadVersion(preferredVersion)}catch(error){
+    console.error(error);
+    showNotice(`Could not load ${getVersion(preferredVersion).name}; using ESV temporarily. Your saved Bible version will be retried automatically.`,'error',8000);
+    try{await loadVersion('esv',{persist:false})}catch(fallback){boot.textContent='TMS 60 could not be loaded.';console.error(fallback);return}
+  }
   if(!onboardingSeen())openOnboarding();
 })();
 </script>
