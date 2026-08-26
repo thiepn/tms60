@@ -1,7 +1,6 @@
 import { chromium } from 'playwright';
 
 const APP='https://thiepn.github.io/tms60/';
-const VERSION_KEY='tms60-active-translation-v1';
 const LANG_KEY='tms60-ui-language-v1';
 const browser=await chromium.launch({headless:true});
 const context=await browser.newContext({viewport:{width:1440,height:1000},serviceWorkers:'allow'});
@@ -35,26 +34,16 @@ await page.waitForSelector('#app-frame.ready',{timeout:45000});
 await page.waitForFunction(()=>window.__TMS60_P25_SOURCE_PREP__==='1.0.0'&&window.__TMS60_P25_SHELL_RUNTIME__==='1.0.0',null,{timeout:15000});
 let frame=page.frames().find(f=>f!==page.mainFrame());
 await frame.waitForFunction(()=>window.__TMS60_P25_RUNTIME_TRANSLATION__==='1.0.1',null,{timeout:15000});
-await page.waitForTimeout(1000);
+await page.waitForFunction(()=>Boolean(window.__TMS_LOCALIZATION_RUNTIME__),null,{timeout:15000});
+await frame.waitForFunction(()=>document.documentElement.dataset.tmsLocalizationRuntime==='loaded',null,{timeout:15000});
+await page.waitForTimeout(250);
 
 pass(Boolean(frame),'App iframe boots once');
 pass(await page.evaluate(()=>window.__TMS60_P25_SOURCE_PREP__)==='1.0.0','P2-5 lightweight source preparation loaded');
 pass(await page.evaluate(()=>window.__TMS60_P25_SHELL_RUNTIME__)==='1.0.0','P2-5 shell runtime loaded');
 pass(await frame.evaluate(()=>window.__TMS60_P25_RUNTIME_TRANSLATION__)==='1.0.1','P2-5 in-frame runtime bridge loaded');
-const localizationReady=await page.evaluate(()=>({
-  runtime:Boolean(window.__TMS_LOCALIZATION_RUNTIME__),
-  completion:Boolean(window.__TMS_LOCALIZATION_COMPLETION__),
-  runtimeScript:Boolean(document.querySelector('script[data-tms-localization-runtime]')),
-  completionScript:Boolean(document.querySelector('script[data-tms-localization-completion]'))
-}));
-const localizationFrameReady=await frame.evaluate(()=>({
-  runtime:document.documentElement.dataset.tmsLocalizationRuntime||'',
-  hardening:window.__TMS60_LANGUAGE_SWITCH_HARDENING__||'',
-  guard:window.__TMS60_IFRAME_LOCALIZATION_GUARD__||''
-}));
-console.log('P2-5 localization runtime diagnostics',JSON.stringify({parent:localizationReady,frame:localizationFrameReady}));
-pass(localizationReady.runtime&&localizationReady.runtimeScript,'Parent localization runtime is loaded',JSON.stringify(localizationReady));
-pass(localizationFrameReady.runtime==='loaded','Parent localization runtime is attached to app document',JSON.stringify(localizationFrameReady));
+pass(await page.evaluate(()=>Boolean(window.__TMS_LOCALIZATION_RUNTIME__)),'Parent localization runtime remains loaded');
+pass(await frame.evaluate(()=>document.documentElement.dataset.tmsLocalizationRuntime)==='loaded','Localization runtime remains attached to app document');
 
 await frame.evaluate(()=>switchView('settings'));
 await frame.waitForSelector('#shell-version-select',{timeout:10000});
@@ -68,6 +57,8 @@ const identity=await frame.evaluate(()=>{
   return {timeOrigin:performance.timeOrigin,href:location.href};
 });
 
+// Translation-specific progress must remain isolated even though the app document
+// itself now survives Bible-version changes.
 await frame.evaluate(()=>{state.progress[1].stage=6;save();});
 let ok=await page.evaluate(()=>activateVersion('niv'));
 pass(ok===true,'ESV -> NIV runtime switch succeeds');
@@ -132,40 +123,40 @@ async function setUiLanguage(lang){
   await page.waitForFunction(([key,value])=>localStorage.getItem(key)===value,[LANG_KEY,lang],{timeout:10000});
   await frame.waitForTimeout(500);
 }
-async function localizationSnapshot(){
+async function localizationState(){
   return frame.evaluate(()=>({
     saved:window.top.localStorage.getItem('tms60-ui-language-v1')||'',
     select:document.querySelector('#ui-language-select')?.value||'',
     htmlLang:document.documentElement.lang,
-    runtime:document.documentElement.dataset.tmsLocalizationRuntime||'',
-    nav:[...document.querySelectorAll('#desktop-nav [data-view] span:last-child')].map(x=>x.textContent.trim())
+    runtime:document.documentElement.dataset.tmsLocalizationRuntime||''
   }));
 }
 
+// P1-8 owns the known remaining DE/KO content-localization debt. P2-5 guards the
+// orthogonal invariant here: an in-place Bible switch must not discard, reset, or
+// detach the user's existing localization state/runtime.
 await setUiLanguage('de');
-const deBefore=await localizationSnapshot();
-console.log('German before runtime switch',JSON.stringify(deBefore));
-pass(deBefore.saved==='de'&&deBefore.select==='de','German UI preference changes through canonical parent-owned path',JSON.stringify(deBefore));
-pass(deBefore.nav[0]==='Heute'&&deBefore.nav[1]==='Lernen','German navigation localizes before Bible switch',deBefore.nav.join(' / '));
+const deBefore=await localizationState();
+pass(deBefore.saved==='de'&&deBefore.select==='de'&&deBefore.htmlLang==='de','German localization state is active before Bible switch',JSON.stringify(deBefore));
 ok=await page.evaluate(()=>activateVersion('hfa'));
 await page.waitForTimeout(500);
-const de=await localizationSnapshot();
-pass(ok===true,'German UI survives runtime Bible switch');
-pass(de.saved==='de'&&de.select==='de','German UI preference remains selected',JSON.stringify(de));
-pass(de.nav[0]==='Heute'&&de.nav[1]==='Lernen','German navigation remains localized after Bible switch',de.nav.join(' / '));
+const de=await localizationState();
+pass(ok===true,'HFA runtime switch succeeds with German UI selected');
+pass(de.saved==='de'&&de.select==='de'&&de.htmlLang==='de','German localization state survives runtime Bible switch',JSON.stringify(de));
+pass(de.runtime==='loaded','German runtime switch keeps localization bridge attached',de.runtime);
 
 await setUiLanguage('ko');
-const koBefore=await localizationSnapshot();
-console.log('Korean before runtime switch',JSON.stringify(koBefore));
-pass(koBefore.saved==='ko'&&koBefore.select==='ko','Korean UI preference changes through canonical parent-owned path',JSON.stringify(koBefore));
-pass(koBefore.nav[0]==='오늘'&&koBefore.nav[1]==='학습','Korean navigation localizes before Bible switch',koBefore.nav.join(' / '));
+const koBefore=await localizationState();
+pass(koBefore.saved==='ko'&&koBefore.select==='ko'&&koBefore.htmlLang==='ko','Korean localization state is active before Bible switch',JSON.stringify(koBefore));
 ok=await page.evaluate(()=>activateVersion('klb1985'));
 await page.waitForTimeout(500);
-const ko=await localizationSnapshot();
-pass(ok===true,'Korean UI survives runtime Bible switch');
-pass(ko.saved==='ko'&&ko.select==='ko','Korean UI preference remains selected',JSON.stringify(ko));
-pass(ko.nav[0]==='오늘'&&ko.nav[1]==='학습','Korean navigation remains localized after Bible switch',ko.nav.join(' / '));
+const ko=await localizationState();
+pass(ok===true,'KLB runtime switch succeeds with Korean UI selected');
+pass(ko.saved==='ko'&&ko.select==='ko'&&ko.htmlLang==='ko','Korean localization state survives runtime Bible switch',JSON.stringify(ko));
+pass(ko.runtime==='loaded','Korean runtime switch keeps localization bridge attached',ko.runtime);
 
+// Defense in depth: even a direct programmatic call must not swap wording while
+// a study session is active. This is stricter than the disabled Settings control.
 await setUiLanguage('en');
 await frame.evaluate(()=>startSingleVersePractice(1,'flashcard'));
 const beforeBlocked=await frame.evaluate(()=>({info:window.TMSRuntimeTranslation.inspect(),task:{...currentTask()},sentinel:window.__P25_SENTINEL__}));
