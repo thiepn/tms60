@@ -34,13 +34,13 @@ await page.goto(APP,{waitUntil:'domcontentloaded',timeout:45000});
 await page.waitForSelector('#app-frame.ready',{timeout:45000});
 await page.waitForFunction(()=>window.__TMS60_P25_SOURCE_PREP__==='1.0.0'&&window.__TMS60_P25_SHELL_RUNTIME__==='1.0.0',null,{timeout:15000});
 let frame=page.frames().find(f=>f!==page.mainFrame());
-await frame.waitForFunction(()=>window.__TMS60_P25_RUNTIME_TRANSLATION__==='1.0.0',null,{timeout:15000});
+await frame.waitForFunction(()=>window.__TMS60_P25_RUNTIME_TRANSLATION__==='1.0.1',null,{timeout:15000});
 await page.waitForTimeout(250);
 
 pass(Boolean(frame),'App iframe boots once');
 pass(await page.evaluate(()=>window.__TMS60_P25_SOURCE_PREP__)==='1.0.0','P2-5 lightweight source preparation loaded');
 pass(await page.evaluate(()=>window.__TMS60_P25_SHELL_RUNTIME__)==='1.0.0','P2-5 shell runtime loaded');
-pass(await frame.evaluate(()=>window.__TMS60_P25_RUNTIME_TRANSLATION__)==='1.0.0','P2-5 in-frame runtime bridge loaded');
+pass(await frame.evaluate(()=>window.__TMS60_P25_RUNTIME_TRANSLATION__)==='1.0.1','P2-5 in-frame runtime bridge loaded');
 
 await frame.evaluate(()=>switchView('settings'));
 await frame.waitForSelector('#shell-version-select',{timeout:10000});
@@ -120,29 +120,36 @@ async function setUiLanguage(lang){
   await page.waitForFunction(([key,value])=>localStorage.getItem(key)===value,[LANG_KEY,lang],{timeout:10000});
   await frame.waitForTimeout(500);
 }
+async function localizationSnapshot(){
+  return frame.evaluate(()=>({
+    saved:window.top.localStorage.getItem('tms60-ui-language-v1')||'',
+    select:document.querySelector('#ui-language-select')?.value||'',
+    nav:[...document.querySelectorAll('#desktop-nav [data-view] span:last-child')].map(x=>x.textContent.trim())
+  }));
+}
 
 // Localization is independent of Bible wording and must survive an in-place
-// translation swap without forcing the user back to English.
+// translation swap without forcing the user back to English. The iframe's legacy
+// localization guard intentionally reports English from its own localStorage API,
+// so the canonical preference is read from the parent-owned store here.
 await setUiLanguage('de');
+const deBefore=await localizationSnapshot();
+pass(deBefore.saved==='de'&&deBefore.select==='de','German UI preference changes through canonical parent-owned path',JSON.stringify(deBefore));
+pass(deBefore.nav[0]==='Heute'&&deBefore.nav[1]==='Lernen','German navigation localizes before Bible switch',deBefore.nav.join(' / '));
 ok=await page.evaluate(()=>activateVersion('hfa'));
 await page.waitForTimeout(500);
-const de=await frame.evaluate(()=>({
-  saved:localStorage.getItem('tms60-ui-language-v1')||'',
-  select:document.querySelector('#ui-language-select')?.value||'',
-  nav:[...document.querySelectorAll('#desktop-nav [data-view] span:last-child')].map(x=>x.textContent.trim())
-}));
+const de=await localizationSnapshot();
 pass(ok===true,'German UI survives runtime Bible switch');
 pass(de.saved==='de'&&de.select==='de','German UI preference remains selected',JSON.stringify(de));
 pass(de.nav[0]==='Heute'&&de.nav[1]==='Lernen','German navigation remains localized after Bible switch',de.nav.join(' / '));
 
 await setUiLanguage('ko');
+const koBefore=await localizationSnapshot();
+pass(koBefore.saved==='ko'&&koBefore.select==='ko','Korean UI preference changes through canonical parent-owned path',JSON.stringify(koBefore));
+pass(koBefore.nav[0]==='오늘'&&koBefore.nav[1]==='학습','Korean navigation localizes before Bible switch',koBefore.nav.join(' / '));
 ok=await page.evaluate(()=>activateVersion('klb1985'));
 await page.waitForTimeout(500);
-const ko=await frame.evaluate(()=>({
-  saved:localStorage.getItem('tms60-ui-language-v1')||'',
-  select:document.querySelector('#ui-language-select')?.value||'',
-  nav:[...document.querySelectorAll('#desktop-nav [data-view] span:last-child')].map(x=>x.textContent.trim())
-}));
+const ko=await localizationSnapshot();
 pass(ok===true,'Korean UI survives runtime Bible switch');
 pass(ko.saved==='ko'&&ko.select==='ko','Korean UI preference remains selected',JSON.stringify(ko));
 pass(ko.nav[0]==='오늘'&&ko.nav[1]==='학습','Korean navigation remains localized after Bible switch',ko.nav.join(' / '));
