@@ -66,7 +66,7 @@
   }
 
   function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[ch]));
   }
 
   function parseReference(reference) {
@@ -89,20 +89,38 @@
     try { localStorage.removeItem(LEGACY_API_BIBLE_KEY_STORAGE); } catch (_) {}
   }
 
-  function readCachedTexts(def, baseVerses) {
+  function readCachedTexts(def, baseVerses, options = {}) {
     try {
       const raw = localStorage.getItem(cacheKey(def.id));
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (parsed?.schema !== CACHE_SCHEMA || !Array.isArray(parsed.verses) || parsed.verses.length !== baseVerses.length) return null;
+
+      let stale = false;
+      let fetchedAt = 0;
       if (def.source === 'proxy') {
-        const fetchedAt = Date.parse(parsed.fetchedAt || '');
-        if (!Number.isFinite(fetchedAt) || Date.now() - fetchedAt > PROXY_CACHE_MAX_AGE) return null;
+        fetchedAt = Date.parse(parsed.fetchedAt || '');
+        stale = !Number.isFinite(fetchedAt) || Date.now() - fetchedAt > PROXY_CACHE_MAX_AGE;
+        if (stale && !options.allowStale) return null;
       } else if (parsed?.api !== def.api) return null;
 
-      const textById = new Map(parsed.verses.map(v => [Number(v.id), normalizeText(v.text)]));
+      const seen = new Set();
+      const textById = new Map();
+      for (const item of parsed.verses) {
+        const id = Number(item?.id), text = normalizeText(item?.text);
+        if (!Number.isInteger(id) || id < 1 || id > baseVerses.length || seen.has(id) || !text) return null;
+        seen.add(id);
+        textById.set(id, text);
+      }
+      if (seen.size !== baseVerses.length) return null;
+
       const translated = baseVerses.map(v => ({ ...v, text: textById.get(v.id) || '' }));
-      return translated.every(v => v.text) ? { verses: translated, copyright: normalizeText(parsed.copyright || '') } : null;
+      return translated.every(v => v.text) ? {
+        verses: translated,
+        copyright: normalizeText(parsed.copyright || ''),
+        stale,
+        fetchedAt: Number.isFinite(fetchedAt) ? fetchedAt : 0
+      } : null;
     } catch (_) {
       return null;
     }
@@ -184,38 +202,53 @@
   }
 
   async function fetchProxyVerses(def, baseVerses) {
-    const cached = readCachedTexts(def, baseVerses);
-    if (cached) return cached;
-    if (!def.proxySlug) throw new Error(`${def.short} has no server-side source configured.`);
+    const fresh = readCachedTexts(def, baseVerses);
+    if (fresh) return fresh;
 
-    const baseUrl = await getBibleProxyBaseUrl();
-    const response = await fetch(`${baseUrl}/v1/bibles/${encodeURIComponent(def.proxySlug)}/tms60`, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      cache: 'no-store'
-    });
-    if (!response.ok) {
-      let detail = '';
-      try { detail = normalizeText((await response.json())?.error || ''); } catch (_) {}
-      throw new Error(detail || `${def.short} service returned HTTP ${response.status}.`);
+    // A complete cached proxy dataset never becomes unusable merely because it
+    // is old. The 14-day age is a refresh threshold, not an expiration date.
+    // When online we still try to refresh stale wording; when offline or when the
+    // service fails, the last validated dataset remains available indefinitely.
+    const stale = readCachedTexts(def, baseVerses, { allowStale: true });
+    if (stale && typeof navigator !== 'undefined' && navigator.onLine === false) return stale;
+    if (!def.proxySlug) {
+      if (stale) return stale;
+      throw new Error(`${def.short} has no server-side source configured.`);
     }
-    const payload = await response.json();
-    if (!payload || !Array.isArray(payload.verses) || payload.verses.length !== 60) throw new Error(`${def.short} service returned an incomplete TMS dataset.`);
 
-    const seen = new Set();
-    const textById = new Map();
-    for (const item of payload.verses) {
-      const id = Number(item?.id), text = normalizeText(item?.text);
-      if (!Number.isInteger(id) || id < 1 || id > 60 || seen.has(id) || !text) throw new Error(`${def.short} service returned an invalid TMS dataset.`);
-      seen.add(id); textById.set(id, text);
+    try {
+      const baseUrl = await getBibleProxyBaseUrl();
+      const response = await fetch(`${baseUrl}/v1/bibles/${encodeURIComponent(def.proxySlug)}/tms60`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        cache: 'no-store'
+      });
+      if (!response.ok) {
+        let detail = '';
+        try { detail = normalizeText((await response.json())?.error || ''); } catch (_) {}
+        throw new Error(detail || `${def.short} service returned HTTP ${response.status}.`);
+      }
+      const payload = await response.json();
+      if (!payload || !Array.isArray(payload.verses) || payload.verses.length !== 60) throw new Error(`${def.short} service returned an incomplete TMS dataset.`);
+
+      const seen = new Set();
+      const textById = new Map();
+      for (const item of payload.verses) {
+        const id = Number(item?.id), text = normalizeText(item?.text);
+        if (!Number.isInteger(id) || id < 1 || id > 60 || seen.has(id) || !text) throw new Error(`${def.short} service returned an invalid TMS dataset.`);
+        seen.add(id); textById.set(id, text);
+      }
+      if (seen.size !== 60) throw new Error(`${def.short} service returned an incomplete TMS dataset.`);
+
+      const translated = baseVerses.map(base => ({ ...base, text: textById.get(base.id) || '' }));
+      if (translated.some(v => !v.text)) throw new Error(`${def.short} service is missing one or more TMS passages.`);
+      const copyright = normalizeText(payload.copyright || '');
+      writeCachedTexts(def, translated, copyright);
+      return { verses: translated, copyright };
+    } catch (error) {
+      if (stale) return stale;
+      throw error;
     }
-    if (seen.size !== 60) throw new Error(`${def.short} service returned an incomplete TMS dataset.`);
-
-    const translated = baseVerses.map(base => ({ ...base, text: textById.get(base.id) || '' }));
-    if (translated.some(v => !v.text)) throw new Error(`${def.short} service is missing one or more TMS passages.`);
-    const copyright = normalizeText(payload.copyright || '');
-    writeCachedTexts(def, translated, copyright);
-    return { verses: translated, copyright };
   }
 
   async function fetchTranslatedVerses(def, baseVerses) {
