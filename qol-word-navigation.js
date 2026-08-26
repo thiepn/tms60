@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_WORD_NAV_QOL__) return;
-  window.__TMS60_WORD_NAV_QOL__ = '1.5.0';
+  window.__TMS60_WORD_NAV_QOL__ = '1.6.0';
 
   const EMPTY_GUARD_KEY = 'tms60-qol-empty-advance-guard-v1';
 
@@ -98,6 +98,8 @@
       return true;
     }
 
+    // Always move exactly one position forward. A filled next box is still a
+    // valid navigation target; content must never cause Space/Tab to skip it.
     if (index < inputs.length - 1) {
       focusTarget(inputs[index + 1], false);
       return true;
@@ -117,9 +119,12 @@
     const index = inputs.indexOf(input);
     if (index < 0) return;
 
-    if (event.key === 'Backspace' && input.value.length === 0 && index > 0) {
+    // Backspace is the cloze "previous box" control. It must work regardless
+    // of whether the current box already contains text. Selecting the previous
+    // box makes correction/replacement immediate without deleting this answer.
+    if (event.key === 'Backspace' && index > 0) {
       event.preventDefault();
-      event.stopPropagation();
+      event.stopImmediatePropagation();
       focusTarget(inputs[index - 1], false);
       return;
     }
@@ -131,7 +136,7 @@
     if (!advance) return;
 
     event.preventDefault();
-    event.stopPropagation();
+    event.stopImmediatePropagation();
     advanceFromInput(input);
   }, true);
 
@@ -145,7 +150,7 @@
     if (event.inputType !== 'insertText' || !/^\s+$/u.test(data)) return;
 
     event.preventDefault();
-    event.stopPropagation();
+    event.stopImmediatePropagation();
     advanceFromInput(input);
   }, true);
 
