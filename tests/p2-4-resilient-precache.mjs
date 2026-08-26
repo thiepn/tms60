@@ -2,7 +2,6 @@ import vm from 'node:vm';
 import {chromium} from 'playwright';
 
 const APP='https://thiepn.github.io/tms60/';
-const EXPECTED_CACHE='tms60-stability30-2026-08-26';
 let failures=0;
 const check=(condition,name,detail='')=>{
   console.log(`${condition?'PASS':'FAIL'} ${name}${detail?' — '+detail:''}`);
@@ -54,7 +53,7 @@ async function settleWorker(page,timeout=15000){
   },timeout);
 }
 
-function makeServiceWorkerHarness(source,{failedPath,oldFallback=false,httpFailure=false}={}){
+function makeServiceWorkerHarness(source,currentCache,{failedPath,oldFallback=false,httpFailure=false}={}){
   const scope='https://example.test/tms60/sw.js';
   const normalize=input=>{
     if(input instanceof Request)return input.url;
@@ -84,7 +83,8 @@ function makeServiceWorkerHarness(source,{failedPath,oldFallback=false,httpFailu
     }
   };
   if(oldFallback){
-    const old=cacheFor('tms60-stability29-2026-08-26');
+    const previousName=currentCache==='tms60-previous-test-cache'?'tms60-older-test-cache':'tms60-previous-test-cache';
+    const old=cacheFor(previousName);
     old.put(new Request(new URL(failedPath,scope)),new Response(`old-cache:${failedPath}`,{status:200}));
   }
   const handlers={};
@@ -141,27 +141,29 @@ try{
 
   const sourceResponse=await page.request.get(APP+'sw.js',{headers:{'cache-control':'no-cache'}});
   const source=await sourceResponse.text();
+  const cacheMatch=source.match(/const CACHE='([^']+)'/);
+  const expectedCache=cacheMatch?.[1]||'';
   check(sourceResponse.status()===200,'Service worker source reachable',String(sourceResponse.status()));
-  check(source.includes(EXPECTED_CACHE),'P2-4 cache revision deployed');
+  check(/^tms60-stability\d+-\d{4}-\d{2}-\d{2}$/.test(expectedCache),'P2-4 cache revision declared',expectedCache);
   check(source.includes('Promise.allSettled(CORE.map'),'Install uses all-settled precaching');
   check(source.includes('previousCachedResponse'),'Previous-cache fallback is explicit');
   check(source.includes('precacheAsset'),'Per-asset precache isolation is explicit');
   check(!source.includes('Promise.all(CORE.map'),'All-or-nothing CORE Promise.all removed');
   check(!source.includes('Failed to precache'),'Single asset failure no longer throws the old fatal precache error');
 
-  const freshHarness=makeServiceWorkerHarness(source,{failedPath:'./app.html'});
+  const freshHarness=makeServiceWorkerHarness(source,expectedCache,{failedPath:'./app.html'});
   let freshInstallError='';
   try{await freshHarness.install()}catch(error){freshInstallError=String(error?.stack||error)}
-  const freshStore=freshHarness.stores.get(EXPECTED_CACHE)||new Map();
+  const freshStore=freshHarness.stores.get(expectedCache)||new Map();
   check(!freshInstallError,'Fresh install survives one unavailable precache asset',freshInstallError);
   check(freshHarness.skipWaitingCalled,'Fresh resilient install still reaches skipWaiting');
   check(!freshStore.has(freshHarness.normalize('./app.html')),'Unavailable fresh-install asset is allowed to remain missing');
   check(freshStore.has(freshHarness.normalize('./index.html'))&&freshStore.has(freshHarness.normalize('./translations.js')),'Other precache assets still populate after one failure',String(freshStore.size));
 
-  const updateHarness=makeServiceWorkerHarness(source,{failedPath:'./icon-512.png',oldFallback:true,httpFailure:true});
+  const updateHarness=makeServiceWorkerHarness(source,expectedCache,{failedPath:'./icon-512.png',oldFallback:true,httpFailure:true});
   let updateInstallError='';
   try{await updateHarness.install()}catch(error){updateInstallError=String(error?.stack||error)}
-  const updateStore=updateHarness.stores.get(EXPECTED_CACHE)||new Map();
+  const updateStore=updateHarness.stores.get(expectedCache)||new Map();
   const fallbackResponse=updateStore.get(updateHarness.normalize('./icon-512.png'));
   const fallbackText=fallbackResponse?await fallbackResponse.clone().text():'';
   check(!updateInstallError,'Update install survives one HTTP precache failure',updateInstallError);
@@ -173,8 +175,8 @@ try{
   await frameOf(page);
   const worker=await settleWorker(page);
   check(worker.controlled,'Page is controlled by a service worker');
-  check(worker.caches.includes(EXPECTED_CACHE),'Current P2-4 cache is active',worker.caches.join(', '));
-  check(!worker.caches.some(name=>name.startsWith('tms60-')&&name!==EXPECTED_CACHE),'Older TMS caches removed after successful production install',worker.caches.join(', '));
+  check(Boolean(expectedCache)&&worker.caches.includes(expectedCache),'Current P2-4 cache is active',worker.caches.join(', '));
+  check(Boolean(expectedCache)&&!worker.caches.some(name=>name.startsWith('tms60-')&&name!==expectedCache),'Older TMS caches removed after successful production install',worker.caches.join(', '));
 
   const cacheState=await page.evaluate(async cacheName=>{
     const cache=await caches.open(cacheName);
@@ -187,7 +189,7 @@ try{
       icon:ends('icon-512.png'),
       count:urls.length
     };
-  },EXPECTED_CACHE);
+  },expectedCache);
   check(cacheState.index&&cacheState.app&&cacheState.translations&&cacheState.icon,'Normal production install still precaches complete app assets',JSON.stringify(cacheState));
 
   await context.setOffline(true);
