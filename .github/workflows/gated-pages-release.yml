@@ -67,6 +67,7 @@ jobs:
             tests/p2-2-app-bridge-observer-scope.mjs
             tests/p2-3-service-worker-strategy.mjs
             tests/p2-4-resilient-precache.mjs
+            tests/p2-5-runtime-version-switch.mjs
             tests/rc1-bible-gate.mjs
           )
 
@@ -91,6 +92,7 @@ jobs:
             tests/p2-2-app-bridge-observer-scope.mjs
             tests/p2-3-service-worker-strategy.mjs
             tests/p2-4-resilient-precache.mjs
+            tests/p2-5-runtime-version-switch.mjs
             tests/rc1-bible-gate.mjs
           )
 
