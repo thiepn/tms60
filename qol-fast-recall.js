@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_FAST_RECALL_QOL__) return;
-  window.__TMS60_FAST_RECALL_QOL__ = '1.7.0';
+  window.__TMS60_FAST_RECALL_QOL__ = '1.8.0';
 
   const style = document.createElement('style');
   style.id = 'tms60-fast-recall-style';
@@ -173,6 +173,16 @@
     scheduleStudyFocus();
   };
 
+  let syncQueued=false;
+  const scheduleStudySync=()=>{
+    if(syncQueued)return;
+    syncQueued=true;
+    requestAnimationFrame(()=>{
+      syncQueued=false;
+      syncStudyQoL();
+    });
+  };
+
   const repeatVerseButton=()=>{
     ensureRepeatButton();
     const complete=[...document.querySelectorAll('.session-complete')].find(visibleEnabled);
@@ -213,13 +223,35 @@
     event.preventDefault();event.stopImmediatePropagation();clickAction(selector);
   },true);
 
+  let observedStudyRoot=null;
+  let studyObserver=null;
   const bindStudyObserver=()=>{
     const root=document.getElementById('view-study');
-    if(!root||root.dataset.qolFocusObserved==='1')return;
+    if(!root)return false;
+    if(root===observedStudyRoot&&studyObserver)return true;
+    studyObserver?.disconnect();
+    observedStudyRoot=root;
     root.dataset.qolFocusObserved='1';
-    new MutationObserver(syncStudyQoL).observe(root,{childList:true,subtree:true});
+    studyObserver=new MutationObserver(scheduleStudySync);
+    studyObserver.observe(root,{childList:true,subtree:true});
     syncStudyQoL();
+    return true;
   };
-  bindStudyObserver();
-  new MutationObserver(bindStudyObserver).observe(document.body,{childList:true,subtree:true});
+
+  // The enhancement loader injects this layer only after the app core and its
+  // static view roots exist. Observe Study itself, not the entire document.
+  // A cheap direct-child observer on .content only handles the exceptional case
+  // where a future renderer replaces #view-study wholesale; mutations inside
+  // every other view no longer wake the fast-recall QoL layer.
+  if(!bindStudyObserver()){
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bindStudyObserver,{once:true});
+    else requestAnimationFrame(bindStudyObserver);
+  }
+  const contentRoot=document.querySelector('.content');
+  if(contentRoot){
+    new MutationObserver(()=>{
+      const live=document.getElementById('view-study');
+      if(live&&live!==observedStudyRoot)bindStudyObserver();
+    }).observe(contentRoot,{childList:true});
+  }
 })();
