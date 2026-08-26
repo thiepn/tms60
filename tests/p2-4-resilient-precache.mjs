@@ -23,26 +23,35 @@ async function frameOf(page,timeout=25000){
   }
   throw new Error('app frame did not become ready');
 }
-async function settleWorker(page){
-  return page.evaluate(async()=>{
-    const reg=await navigator.serviceWorker.ready;
+async function settleWorker(page,timeout=15000){
+  return page.evaluate(async timeout=>{
+    if(!('serviceWorker'in navigator))throw new Error('Service workers are unavailable in this browser context.');
+    let reg=await navigator.serviceWorker.getRegistration();
+    if(!reg)reg=await navigator.serviceWorker.register('sw.js');
+    reg=await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('Service worker did not become ready in time.')),timeout))
+    ]);
     await reg.update();
     const worker=reg.installing||reg.waiting;
     if(worker&&worker.state!=='activated'){
-      await new Promise(resolve=>{
-        const onState=()=>{
-          if(worker.state==='activated'||worker.state==='redundant'){
-            worker.removeEventListener('statechange',onState);
-            resolve();
-          }
-        };
-        worker.addEventListener('statechange',onState);
-        onState();
-      });
+      await Promise.race([
+        new Promise(resolve=>{
+          const onState=()=>{
+            if(worker.state==='activated'||worker.state==='redundant'){
+              worker.removeEventListener('statechange',onState);
+              resolve();
+            }
+          };
+          worker.addEventListener('statechange',onState);
+          onState();
+        }),
+        new Promise((_,reject)=>setTimeout(()=>reject(new Error('Service worker update did not settle in time.')),timeout))
+      ]);
     }
     await new Promise(r=>setTimeout(r,300));
     return {controlled:Boolean(navigator.serviceWorker.controller),caches:await caches.keys()};
-  });
+  },timeout);
 }
 
 function makeServiceWorkerHarness(source,{failedPath,oldFallback=false,httpFailure=false}={}){
@@ -170,11 +179,12 @@ try{
   const cacheState=await page.evaluate(async cacheName=>{
     const cache=await caches.open(cacheName);
     const urls=(await cache.keys()).map(r=>new URL(r.url).pathname);
+    const ends=name=>urls.some(x=>x.endsWith(`/tms60/${name}`)||x.endsWith(`/${name}`));
     return {
-      index:urls.some(x=>x.endsWith('/tms60/index.html')),
-      app:urls.some(x=>x.endsWith('/tms60/app.html')),
-      translations:urls.some(x=>x.endsWith('/tms60/translations.js')),
-      icon:urls.some(x=>x.endsWith('/tms60/icon-512.png')),
+      index:ends('index.html'),
+      app:ends('app.html'),
+      translations:ends('translations.js'),
+      icon:ends('icon-512.png'),
       count:urls.length
     };
   },EXPECTED_CACHE);
