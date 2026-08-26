@@ -1,4 +1,5 @@
 name: P1-5 Translation TTS
+# P1-5 release gate: run against the exact deployed commit.
 on:
   push:
     branches: [main]
