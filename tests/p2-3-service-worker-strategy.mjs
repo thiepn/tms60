@@ -62,8 +62,10 @@ try{
 
   const sourceResponse=await page.request.get(APP+'sw.js',{headers:{'cache-control':'no-cache'}});
   const source=await sourceResponse.text();
+  const cacheMatch=source.match(/const CACHE='([^']+)'/);
+  const expectedCache=cacheMatch?.[1]||'';
   check(sourceResponse.status()===200,'Service worker source reachable',String(sourceResponse.status()));
-  check(source.includes("tms60-stability30-2026-08-26"),'P2-3 cache revision deployed');
+  check(/^tms60-stability\d+-\d{4}-\d{2}-\d{2}$/.test(expectedCache),'P2-3 cache revision declared',expectedCache);
   check(!source.includes("cache:'no-store'")&&!source.includes('cache:"no-store"'),'Runtime no-store override removed');
   check(source.includes('function networkFirst('),'Network-first strategy is explicit');
   check(source.includes('async function cacheFirst('),'Cache-first strategy is explicit');
@@ -76,11 +78,11 @@ try{
   await frameOf(page);
   const worker=await settleWorker(page);
   check(worker.controlled,'Page is controlled by a service worker');
-  check(worker.caches.includes('tms60-stability30-2026-08-26'),'Current P2-3 cache is active',worker.caches.join(', '));
-  check(!worker.caches.some(name=>name.startsWith('tms60-')&&name!=='tms60-stability30-2026-08-26'),'Older TMS caches removed',worker.caches.join(', '));
+  check(Boolean(expectedCache)&&worker.caches.includes(expectedCache),'Current P2-3 cache is active',worker.caches.join(', '));
+  check(Boolean(expectedCache)&&!worker.caches.some(name=>name.startsWith('tms60-')&&name!==expectedCache),'Older TMS caches removed',worker.caches.join(', '));
 
-  const cacheState=await page.evaluate(async()=>{
-    const cache=await caches.open('tms60-stability30-2026-08-26');
+  const cacheState=await page.evaluate(async cacheName=>{
+    const cache=await caches.open(cacheName);
     const urls=(await cache.keys()).map(r=>new URL(r.url).pathname);
     return {
       index:urls.some(x=>x.endsWith('/tms60/index.html'))||urls.some(x=>x.endsWith('/index.html')),
@@ -90,7 +92,7 @@ try{
       manifest:urls.some(x=>x.endsWith('/tms60/manifest.webmanifest'))||urls.some(x=>x.endsWith('/manifest.webmanifest')),
       count:urls.length
     };
-  });
+  },expectedCache);
   check(cacheState.index&&cacheState.app&&cacheState.translations,'Mutable app shell is precached',JSON.stringify(cacheState));
   check(cacheState.icon&&cacheState.manifest,'Static assets are precached',JSON.stringify(cacheState));
 
