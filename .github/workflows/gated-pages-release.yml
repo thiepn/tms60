@@ -69,6 +69,7 @@ jobs:
             tests/p2-4-resilient-precache.mjs
             tests/p2-5-runtime-version-switch.mjs
             tests/p2-6-theme-sync.mjs
+            tests/p2-7-backup-identity.mjs
             tests/rc1-bible-gate.mjs
           )
 
@@ -95,6 +96,7 @@ jobs:
             tests/p2-4-resilient-precache.mjs
             tests/p2-5-runtime-version-switch.mjs
             tests/p2-6-theme-sync.mjs
+            tests/p2-7-backup-identity.mjs
             tests/rc1-bible-gate.mjs
           )
 
