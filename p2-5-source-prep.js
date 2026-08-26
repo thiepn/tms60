@@ -1,6 +1,8 @@
 /* P2-5 source preparation.
  * Keep the one cold iframe boot compatible with the existing translation adapter,
  * then make that generated document capable of later in-place dataset swaps.
+ * P2-7 also removes the legacy ESV-specific backup label before the adapter runs
+ * and injects explicit cold-boot translation metadata for the export bridge.
  */
 'use strict';
 (() => {
@@ -35,7 +37,13 @@
     return match ? decodeHtml(match[1]) : '';
   }
 
-  function makeRuntimeCapable(source) {
+  function removeLegacyBackupIdentity(source) {
+    const legacy = "application:'TMS 60 ESV Memory Lab'";
+    if (!String(source || '').includes(legacy)) throw new Error('Could not locate the legacy ESV backup identity.');
+    return String(source).replace(legacy, "application:'TMS 60 Memory Lab'");
+  }
+
+  function makeRuntimeCapable(source, definition) {
     let patched = String(source || '');
     const freezeMarker = 'for(const verse of VERSES)Object.freeze(verse);Object.freeze(VERSES);Object.freeze(PACKS);';
     if (!patched.includes(freezeMarker)) throw new Error('Could not prepare the TMS verse dataset for runtime switching.');
@@ -45,19 +53,35 @@
     if (!keyPattern.test(patched)) throw new Error('Could not prepare translation-specific storage for runtime switching.');
     patched = patched.replace(keyPattern, "let KEY='$1',SNAP_KEY=KEY+'-snapshots';const SCHEMA=");
 
+    const bootIdentity = {
+      id: String(definition?.id || '').trim(),
+      short: String(definition?.short || '').trim(),
+      name: String(definition?.name || '').trim(),
+      saveKey: String(definition?.saveKey || '').trim()
+    };
+    if (!bootIdentity.id || !bootIdentity.short || !bootIdentity.name || !bootIdentity.saveKey) {
+      throw new Error('Could not prepare cold-boot translation identity.');
+    }
+
     if (!patched.includes('runtime-translation-switch.js')) {
-      patched = patched.replace('</body>', '<script src="runtime-translation-switch.js"></scr' + 'ipt></body>');
+      const identityScript = `<script>window.__TMS60_BOOT_TRANSLATION__=${JSON.stringify(bootIdentity)};</script>`;
+      patched = patched.replace('</body>', `${identityScript}<script src="runtime-translation-switch.js"></script></body>`);
     }
     return patched;
   }
 
   async function buildAppSource(source, versionId) {
     if (!baseVerses) baseVerses = extractBaseVerses(source);
-    const built = await nativeBuildAppSource(source, versionId);
+
+    // Strip the old ESV-only application label before translations.js sees the
+    // source. This prevents its historical whole-source string substitution from
+    // being responsible for backup identity on any Bible version.
+    const identityNeutralSource = removeLegacyBackupIdentity(source);
+    const built = await nativeBuildAppSource(identityNeutralSource, versionId);
     const copyright = extractCopyright(built.source);
     return {
       ...built,
-      source: makeRuntimeCapable(built.source),
+      source: makeRuntimeCapable(built.source, built.definition),
       copyright
     };
   }
@@ -80,4 +104,5 @@
   window.TMSVersions = Object.freeze({ ...versions, buildAppSource });
   window.TMSRuntimeDatasetSource = Object.freeze({ loadDataset });
   window.__TMS60_P25_SOURCE_PREP__ = '1.0.0';
+  window.__TMS60_P27_BACKUP_IDENTITY_PREP__ = '1.0.0';
 })();
