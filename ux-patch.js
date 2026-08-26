@@ -2,8 +2,14 @@
   'use strict';
 
   const SHELL_THEME_KEY = 'tms60-global-theme-v1';
+  const UI_LANGUAGE_KEY = 'tms60-ui-language-v1';
   const THEME_APPEARANCES = new Set(['light', 'dark']);
   const THEME_ACCENTS = new Set(['neutral', 'blue', 'green', 'red', 'purple', 'brown', 'orange', 'magenta']);
+  const UI_LANGUAGES = [
+    ['en', 'English'],
+    ['de', 'Deutsch'],
+    ['ko', '한국어']
+  ];
 
   let lastTaskId = null;
   let compactScheduled = false;
@@ -32,6 +38,18 @@
 
   function activeVersionId() {
     try { return String(localStorage.getItem('tms60-active-translation-v1') || ''); } catch (_) { return ''; }
+  }
+
+  function storedUiLanguage() {
+    try {
+      const value = shell().localStorage?.getItem(UI_LANGUAGE_KEY);
+      if (UI_LANGUAGES.some(([id]) => id === value)) return value;
+    } catch (_) {}
+    try {
+      const value = localStorage.getItem(UI_LANGUAGE_KEY);
+      if (UI_LANGUAGES.some(([id]) => id === value)) return value;
+    } catch (_) {}
+    return 'en';
   }
 
   function syncShellThemeFromApp(syncParent = false) {
@@ -81,6 +99,33 @@
     document.head.appendChild(style);
   }
 
+  function createLanguageField() {
+    const field = document.createElement('div');
+    field.className = 'field';
+    field.dataset.patchLanguageField = '1';
+
+    const label = document.createElement('label');
+    label.htmlFor = 'ui-language-select';
+    label.textContent = 'Interface language';
+
+    const select = document.createElement('select');
+    select.id = 'ui-language-select';
+    const active = storedUiLanguage();
+    for (const [id, name] of UI_LANGUAGES) {
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = name;
+      option.selected = id === active;
+      select.appendChild(option);
+    }
+
+    const help = document.createElement('div');
+    help.className = 'help';
+    help.textContent = 'The app language changes menus and instructions. Your Bible version is a separate setting.';
+    field.append(label, select, help);
+    return { field, select };
+  }
+
   function patchTranslationSettings() {
     settingsPatchScheduled = false;
     addStyles();
@@ -88,9 +133,6 @@
     const card = document.querySelector('[data-shell-version-settings]');
     const copyright = document.getElementById('translation-copyright');
 
-    // Licensed translations may require the attribution to remain visible, but
-    // it must never be a fixed overlay over the mobile navigation. Keep the
-    // source node outside the re-rendered Settings tree and mirror it there.
     if (copyright) {
       if (card) {
         copyright.hidden = true;
@@ -115,9 +157,6 @@
     const bibleSelect = card.querySelector('#shell-version-select');
     if (!bibleSelect) return;
 
-    // App language and Bible version are independent. Keep every available
-    // version visible, but do not rebuild identical <option> nodes on every
-    // Settings mutation; that previously created a self-sustaining render loop.
     const defs = versionDefinitions();
     if (defs.length) {
       const currentId = activeVersionId() || bibleSelect.value;
@@ -138,40 +177,70 @@
       else if (defs[0]) bibleSelect.value = defs[0].id;
     }
 
-    if (card.dataset.languagePickerInstalled === '1') return;
+    let languageSelect = card.querySelector('#ui-language-select') || document.querySelector('#ui-language-select');
+    let languageField = languageSelect?.closest('.field') || null;
+    let languageWrapper = languageSelect?.closest('[data-ui-language-settings]') || null;
 
-    // Reuse the app's real interface-language control instead of treating the
-    // Bible text language as the app language. Moving the existing select keeps
-    // its delegated localization listener intact.
-    const languageCard = document.querySelector('[data-ui-language-settings]');
-    const languageSelect = languageCard?.querySelector('#ui-language-select');
-    const languageField = languageSelect?.closest('.field');
-    const oldField = bibleSelect.closest('.field');
-    const originalHelp = oldField?.querySelector('.help') || null;
-    if (!languageCard || !languageSelect || !languageField || !oldField) return;
-
-    const grid = document.createElement('div');
-    grid.className = 'translation-picker-grid';
-    grid.dataset.patchLanguageControls = '1';
-
-    const bibleField = document.createElement('div');
-    bibleField.className = 'field';
-    const bibleLabel = document.createElement('label');
-    bibleLabel.htmlFor = 'shell-version-select';
-    bibleLabel.textContent = 'Bible version';
-    bibleField.append(bibleLabel, bibleSelect);
-
-    grid.append(languageField, bibleField);
-    oldField.replaceWith(grid);
-    if (originalHelp) {
-      originalHelp.style.marginTop = '8px';
-      grid.after(originalHelp);
+    if (!languageSelect || !languageField) {
+      const created = createLanguageField();
+      languageField = created.field;
+      languageSelect = created.select;
+      languageWrapper = null;
     }
 
-    // The language field is now inside the Bible-version card, so remove only
-    // the obsolete wrapper card. The select itself has already been moved.
-    languageCard.remove();
+    const storedLanguage = storedUiLanguage();
+    if (languageSelect.value !== storedLanguage) languageSelect.value = storedLanguage;
+
+    let grid = card.querySelector('[data-patch-language-controls]');
+    if (!grid) {
+      const oldField = bibleSelect.closest('.field');
+      if (!oldField) return;
+      const originalHelp = oldField.querySelector('.help') || null;
+
+      grid = document.createElement('div');
+      grid.className = 'translation-picker-grid';
+      grid.dataset.patchLanguageControls = '1';
+
+      const bibleField = document.createElement('div');
+      bibleField.className = 'field';
+      bibleField.dataset.patchBibleField = '1';
+      const bibleLabel = document.createElement('label');
+      bibleLabel.htmlFor = 'shell-version-select';
+      bibleLabel.textContent = 'Bible version';
+      bibleField.append(bibleLabel, bibleSelect);
+
+      oldField.replaceWith(grid);
+      grid.append(languageField, bibleField);
+      if (originalHelp) {
+        originalHelp.style.marginTop = '8px';
+        grid.after(originalHelp);
+      }
+    } else {
+      if (languageField.parentElement !== grid) grid.prepend(languageField);
+      const bibleField = bibleSelect.closest('.field');
+      if (bibleField && bibleField.parentElement !== grid) grid.appendChild(bibleField);
+    }
+
     card.dataset.languagePickerInstalled = '1';
+    card.dataset.uiLanguageSettings = '1';
+
+    if (languageWrapper && languageWrapper !== card && languageWrapper.isConnected && !languageWrapper.contains(languageSelect)) {
+      languageWrapper.remove();
+    } else if (languageWrapper && languageWrapper !== card && languageWrapper.isConnected && languageSelect.closest('[data-shell-version-settings]') === card) {
+      languageWrapper.remove();
+    }
+
+    for (const duplicate of [...document.querySelectorAll('#ui-language-select')]) {
+      if (duplicate === languageSelect) continue;
+      const wrapper = duplicate.closest('[data-ui-language-settings]');
+      if (wrapper && wrapper !== card) wrapper.remove();
+      else duplicate.remove();
+    }
+
+    for (const wrapper of [...document.querySelectorAll('[data-ui-language-settings]')]) {
+      if (wrapper === card) continue;
+      if (!wrapper.contains(languageSelect)) wrapper.remove();
+    }
   }
 
   function scheduleSettingsPatch() {
