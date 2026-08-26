@@ -1,11 +1,20 @@
 'use strict';
 (() => {
   const current=document.currentScript;
-  const BUILD='20260826-stability18';
+  const BUILD='20260826-stability20';
   const assetUrl=name=>{const u=new URL(name,current?.src||location.href);u.searchParams.set('v',BUILD);return u.href};
   const topLevel=window.top===window;
   const UI_LANGUAGE_KEY='tms60-ui-language-v1';
   const retriedFallbackVersions=new Set();
+
+  function currentUiLanguage(){
+    try{
+      const value=localStorage.getItem(UI_LANGUAGE_KEY);
+      if(value==='en'||value==='de'||value==='ko')return value;
+    }catch(_){}
+    const raw=String(navigator.language||'').toLowerCase();
+    return raw.startsWith('de')?'de':raw.startsWith('ko')?'ko':'en';
+  }
 
   function installIframeLocalizationGuard(){
     if(topLevel||window.__TMS60_IFRAME_LOCALIZATION_GUARD__)return;
@@ -28,16 +37,32 @@
     if(!topLevel||!doc||doc.__TMS60_LOCALIZATION_NAV_ISOLATION__)return;
     const nativeAdd=doc.addEventListener.bind(doc);
     const sourceOf=listener=>{try{return Function.prototype.toString.call(listener).replace(/\s+/g,' ')}catch(_){return''}};
-    Object.defineProperty(doc,'__TMS60_LOCALIZATION_NAV_ISOLATION__',{value:'1.0.0',configurable:true});
+    Object.defineProperty(doc,'__TMS60_LOCALIZATION_NAV_ISOLATION__',{value:'1.1.0',configurable:true});
     doc.addEventListener=function(type,listener,options){
       if(type==='click'&&typeof listener==='function'){
         const src=sourceOf(listener);
         const runtimeFullPass=src.includes('translateDocument');
         const completionFullPass=src.includes('scheduled = true')&&src.includes('setTimeout(run, 0)');
         if(runtimeFullPass||completionFullPass){
+          let queued=false;
+          let latestEvent=null;
+          let latestThis=null;
           const wrapped=function(event){
             if(event?.target?.closest?.('[data-view]'))return;
-            return listener.call(this,event);
+            // English is already the source UI, so a whole-document localization
+            // pass after every tap is pure overhead. Language-change handlers
+            // still run normally and DE/KO keep their localization passes.
+            if(currentUiLanguage()==='en')return;
+            latestEvent=event;
+            latestThis=this;
+            if(queued)return;
+            queued=true;
+            requestAnimationFrame(()=>{
+              queued=false;
+              const e=latestEvent,ctx=latestThis;
+              latestEvent=null;latestThis=null;
+              listener.call(ctx,e);
+            });
           };
           return nativeAdd(type,wrapped,options);
         }
