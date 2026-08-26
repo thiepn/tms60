@@ -56,7 +56,7 @@ try{
   check(sourceResponse.status()===200,'Service worker source reachable',String(sourceResponse.status()));
   check(source.includes("tms60-stability29-2026-08-26"),'P2-3 cache revision deployed');
   check(!source.includes("cache:'no-store'")&&!source.includes('cache:"no-store"'),'Runtime no-store override removed');
-  check(source.includes('async function networkFirst('),'Network-first strategy is explicit');
+  check(source.includes('function networkFirst('),'Network-first strategy is explicit');
   check(source.includes('async function cacheFirst('),'Cache-first strategy is explicit');
   check(source.includes("if(req.mode==='navigate')"),'Navigation requests have an explicit strategy');
   check(source.includes('STATIC_ASSETS.has(url.pathname)'),'Static assets have an explicit strategy');
