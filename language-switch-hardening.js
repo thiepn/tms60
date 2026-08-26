@@ -273,3 +273,101 @@
 
   window.__TMS60_P14_LOCALIZED_REFERENCE_RECALL__ = '1.0.0';
 })();
+
+/* P1-5: speech language and voice selection follow the Bible translation. */
+(() => {
+  if (window.top === window || window.__TMS60_P15_TRANSLATION_TTS__) return;
+
+  const VERSION_SPEECH = Object.freeze({
+    esv: Object.freeze({ lang: 'en-US', prefix: 'en' }),
+    niv: Object.freeze({ lang: 'en-US', prefix: 'en' }),
+    nlt: Object.freeze({ lang: 'en-US', prefix: 'en' }),
+    hfa: Object.freeze({ lang: 'de-DE', prefix: 'de' }),
+    schlachter1951: Object.freeze({ lang: 'de-DE', prefix: 'de' }),
+    klb1985: Object.freeze({ lang: 'ko-KR', prefix: 'ko' }),
+    krv1961: Object.freeze({ lang: 'ko-KR', prefix: 'ko' })
+  });
+
+  function activeSpeechConfig() {
+    let version = 'esv';
+    try { version = localStorage.getItem('tms60-active-translation-v1') || 'esv'; } catch (_) {}
+    return VERSION_SPEECH[version] || VERSION_SPEECH.esv;
+  }
+
+  function voiceLanguage(voice) {
+    return String(voice?.lang || '').toLowerCase().replace('_', '-');
+  }
+
+  function voicesFor(prefix) {
+    try {
+      return voices.filter(voice => voiceLanguage(voice) === prefix || voiceLanguage(voice).startsWith(`${prefix}-`));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function install(attempt = 0) {
+    if (window.__TMS60_P15_TRANSLATION_TTS__) return;
+    if (typeof voiceOptions !== 'function' || typeof speakCurrent !== 'function') {
+      if (attempt < 240) setTimeout(() => install(attempt + 1), 25);
+      return;
+    }
+
+    // enhancements-core owns the translation-aware TTS override. Wait until it
+    // has installed its version before replacing it, so this fix cannot be
+    // overwritten by a later asynchronous core load.
+    let source = '';
+    try { source = Function.prototype.toString.call(speakCurrent); } catch (_) {}
+    const coreTtsReady = source.includes('tms60-active-translation-v1') && source.includes('schlachter1951');
+    if (!coreTtsReady && attempt < 240) {
+      setTimeout(() => install(attempt + 1), 25);
+      return;
+    }
+
+    voiceOptions = function translationVoiceOptions() {
+      const { lang, prefix } = activeSpeechConfig();
+      const matching = voicesFor(prefix);
+      if (!matching.length) return `<option value="">Default browser voice (${htmlEsc(lang)})</option>`;
+      const saved = String(state?.settings?.audioVoice || '');
+      return matching.map(voice => `<option value="${htmlEsc(voice.name)}" ${voice.name === saved ? 'selected' : ''}>${htmlEsc(voice.name)} (${htmlEsc(voice.lang)})</option>`).join('');
+    };
+
+    speakCurrent = function translationSpeakCurrent() {
+      const v = currentVerse();
+      if (!v || !speechAvailable()) {
+        toast('Speech synthesis is not available in this browser.', 'error');
+        return;
+      }
+
+      speechSynthesis.cancel();
+      const { lang, prefix } = activeSpeechConfig();
+      const matching = voicesFor(prefix);
+      const utterance = new SpeechSynthesisUtterance(`${v.reference}. ${v.text}`);
+      const select = document.getElementById('voice-select');
+      const rate = document.getElementById('audio-rate');
+      const selectedName = String(select?.value || '');
+      const savedName = String(state?.settings?.audioVoice || '');
+      const chosenVoice = matching.find(voice => voice.name === selectedName)
+        || matching.find(voice => voice.name === savedName)
+        || matching[0]
+        || null;
+
+      utterance.lang = lang;
+      utterance.voice = chosenVoice;
+      utterance.rate = clamp(rate?.value || state.settings.audioRate, .6, 1.3);
+
+      const chosenName = chosenVoice?.name || '';
+      const changed = state.settings.audioRate !== utterance.rate || state.settings.audioVoice !== chosenName;
+      state.settings.audioRate = utterance.rate;
+      state.settings.audioVoice = chosenName;
+      if (changed) markSettingsChanged();
+
+      speechSynthesis.speak(utterance);
+      scheduleSave();
+    };
+
+    window.__TMS60_P15_TRANSLATION_TTS__ = '1.0.0';
+  }
+
+  install();
+})();
