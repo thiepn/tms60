@@ -111,38 +111,43 @@
       }
     }
 
-    if (!card || card.dataset.languagePickerInstalled === '1') return;
+    if (!card) return;
     const bibleSelect = card.querySelector('#shell-version-select');
-    const oldField = bibleSelect?.closest('.field');
-    const originalHelp = oldField?.querySelector('.help') || null;
-    if (!bibleSelect || !oldField) return;
+    if (!bibleSelect) return;
 
+    // App language and Bible version are independent. Always restore the full
+    // available Bible-version list regardless of the interface language.
     const defs = versionDefinitions();
-    if (!defs.length) return;
-    const currentId = activeVersionId() || bibleSelect.value;
-    const current = defs.find(def => def.id === currentId) || defs[0];
-    const languages = [...new Set(defs.map(def => def.language).filter(Boolean))];
-    if (!languages.length) return;
+    if (defs.length) {
+      const currentId = activeVersionId() || bibleSelect.value;
+      const previous = bibleSelect.value;
+      bibleSelect.replaceChildren();
+      for (const def of defs) {
+        const option = document.createElement('option');
+        option.value = def.id;
+        option.textContent = `${def.name} (${def.short})`;
+        bibleSelect.appendChild(option);
+      }
+      if (defs.some(def => def.id === currentId)) bibleSelect.value = currentId;
+      else if (defs.some(def => def.id === previous)) bibleSelect.value = previous;
+      else if (defs[0]) bibleSelect.value = defs[0].id;
+    }
+
+    if (card.dataset.languagePickerInstalled === '1') return;
+
+    // Reuse the app's real interface-language control instead of treating the
+    // Bible text language as the app language. Moving the existing select keeps
+    // its delegated localization listener intact.
+    const languageCard = document.querySelector('[data-ui-language-settings]');
+    const languageSelect = languageCard?.querySelector('#ui-language-select');
+    const languageField = languageSelect?.closest('.field');
+    const oldField = bibleSelect.closest('.field');
+    const originalHelp = oldField?.querySelector('.help') || null;
+    if (!languageCard || !languageSelect || !languageField || !oldField) return;
 
     const grid = document.createElement('div');
     grid.className = 'translation-picker-grid';
     grid.dataset.patchLanguageControls = '1';
-
-    const languageField = document.createElement('div');
-    languageField.className = 'field';
-    const languageLabel = document.createElement('label');
-    languageLabel.htmlFor = 'shell-language-select';
-    languageLabel.textContent = 'Language';
-    const languageSelect = document.createElement('select');
-    languageSelect.id = 'shell-language-select';
-    for (const language of languages) {
-      const option = document.createElement('option');
-      option.value = language;
-      option.textContent = language;
-      option.selected = language === current.language;
-      languageSelect.appendChild(option);
-    }
-    languageField.append(languageLabel, languageSelect);
 
     const bibleField = document.createElement('div');
     bibleField.className = 'field';
@@ -151,37 +156,17 @@
     bibleLabel.textContent = 'Bible version';
     bibleField.append(bibleLabel, bibleSelect);
 
-    const fillVersions = language => {
-      const matching = defs.filter(def => def.language === language);
-      const previous = bibleSelect.value;
-      bibleSelect.replaceChildren();
-      for (const def of matching) {
-        const option = document.createElement('option');
-        option.value = def.id;
-        option.textContent = `${def.name} (${def.short})`;
-        bibleSelect.appendChild(option);
-      }
-      if (matching.some(def => def.id === currentId)) bibleSelect.value = currentId;
-      else if (matching.some(def => def.id === previous)) bibleSelect.value = previous;
-      else if (matching[0]) bibleSelect.value = matching[0].id;
-      return matching;
-    };
-
-    fillVersions(current.language);
     grid.append(languageField, bibleField);
     oldField.replaceWith(grid);
     if (originalHelp) {
       originalHelp.style.marginTop = '8px';
       grid.after(originalHelp);
     }
-    card.dataset.languagePickerInstalled = '1';
 
-    languageSelect.addEventListener('change', async () => {
-      const matching = fillVersions(languageSelect.value);
-      const next = matching[0];
-      if (!next || next.id === activeVersionId()) return;
-      try { await shell().activateVersion?.(next.id); } catch (_) {}
-    });
+    // The language field is now inside the Bible-version card, so remove only
+    // the obsolete wrapper card. The select itself has already been moved.
+    languageCard.remove();
+    card.dataset.languagePickerInstalled = '1';
   }
 
   function scheduleSettingsPatch() {
