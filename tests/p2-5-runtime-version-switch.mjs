@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 
 const APP='https://thiepn.github.io/tms60/';
 const VERSION_KEY='tms60-active-translation-v1';
+const LANG_KEY='tms60-ui-language-v1';
 const browser=await chromium.launch({headless:true});
 const context=await browser.newContext({viewport:{width:1440,height:1000},serviceWorkers:'allow'});
 const page=await context.newPage();
@@ -110,12 +111,21 @@ for(const [id,short] of versions){
   pass(shell.stats.lastProbeBytes>0&&shell.stats.lastProbeBytes<50000,`${id}: adapter rebuild is limited to a small dataset probe`,`${shell.stats.lastProbeBytes} bytes`);
 }
 
+async function setUiLanguage(lang){
+  await frame.waitForSelector('#ui-language-select',{timeout:10000});
+  await frame.locator('#ui-language-select').evaluate((select,value)=>{
+    select.value=value;
+    select.dispatchEvent(new Event('change',{bubbles:true}));
+  },lang);
+  await page.waitForFunction(([key,value])=>localStorage.getItem(key)===value,[LANG_KEY,lang],{timeout:10000});
+  await frame.waitForTimeout(500);
+}
+
 // Localization is independent of Bible wording and must survive an in-place
 // translation swap without forcing the user back to English.
-await frame.locator('#ui-language-select').selectOption('de');
-await page.waitForTimeout(450);
+await setUiLanguage('de');
 ok=await page.evaluate(()=>activateVersion('hfa'));
-await page.waitForTimeout(450);
+await page.waitForTimeout(500);
 const de=await frame.evaluate(()=>({
   saved:localStorage.getItem('tms60-ui-language-v1')||'',
   select:document.querySelector('#ui-language-select')?.value||'',
@@ -125,10 +135,9 @@ pass(ok===true,'German UI survives runtime Bible switch');
 pass(de.saved==='de'&&de.select==='de','German UI preference remains selected',JSON.stringify(de));
 pass(de.nav[0]==='Heute'&&de.nav[1]==='Lernen','German navigation remains localized after Bible switch',de.nav.join(' / '));
 
-await frame.locator('#ui-language-select').selectOption('ko');
-await page.waitForTimeout(450);
+await setUiLanguage('ko');
 ok=await page.evaluate(()=>activateVersion('klb1985'));
-await page.waitForTimeout(450);
+await page.waitForTimeout(500);
 const ko=await frame.evaluate(()=>({
   saved:localStorage.getItem('tms60-ui-language-v1')||'',
   select:document.querySelector('#ui-language-select')?.value||'',
@@ -140,7 +149,7 @@ pass(ko.nav[0]==='오늘'&&ko.nav[1]==='학습','Korean navigation remains local
 
 // Defense in depth: even a direct programmatic call must not swap wording while
 // a study session is active. This is stricter than the disabled Settings control.
-await frame.evaluate(()=>{localStorage.setItem('tms60-ui-language-v1','en');if(window.applyUiLanguage)window.applyUiLanguage('en');});
+await setUiLanguage('en');
 await frame.evaluate(()=>startSingleVersePractice(1,'flashcard'));
 const beforeBlocked=await frame.evaluate(()=>({info:window.TMSRuntimeTranslation.inspect(),task:{...currentTask()},sentinel:window.__P25_SENTINEL__}));
 const blocked=await page.evaluate(()=>activateVersion('esv'));
