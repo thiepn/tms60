@@ -1,0 +1,36 @@
+name: P1-4 Localized Reference Recall
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'app.html'
+      - 'language-switch-hardening.js'
+      - 'ux-patch.js'
+      - 'enhancements.js'
+      - 'enhancements-core.js'
+      - 'sw.js'
+      - 'tests/p1-4-localized-reference-recall.mjs'
+      - 'tests/wait-for-pages-deployment.mjs'
+      - '.github/workflows/p1-4-localized-reference-recall.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  localized-reference-recall:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Wait for exact GitHub Pages deployment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tests/wait-for-pages-deployment.mjs
+      - run: node tests/p1-4-localized-reference-recall.mjs
