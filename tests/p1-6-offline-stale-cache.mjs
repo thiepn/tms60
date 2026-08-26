@@ -12,6 +12,19 @@ const page=await context.newPage();
 const failures=[];
 const pass=(ok,name,detail='')=>{console.log(`${ok?'PASS':'FAIL'} ${name}${detail?' — '+detail:''}`);if(!ok)failures.push({name,detail})};
 
+async function ensureServiceWorker(page,timeout=15000){
+  return page.evaluate(async timeout=>{
+    if(!('serviceWorker'in navigator))throw new Error('Service workers are unavailable in this browser context.');
+    let registration=await navigator.serviceWorker.getRegistration();
+    if(!registration)registration=await navigator.serviceWorker.register('sw.js');
+    const ready=await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('Service worker did not become ready in time.')),timeout))
+    ]);
+    return {scope:ready.scope,controlled:Boolean(navigator.serviceWorker.controller)};
+  },timeout);
+}
+
 await page.addInitScript(()=>{
   localStorage.setItem('tms60-onboarding-v2','1');
   localStorage.setItem('tms60-onboarding-v3','1');
@@ -24,7 +37,8 @@ await page.addInitScript(()=>{
 await page.goto(APP,{waitUntil:'domcontentloaded',timeout:45000});
 await page.waitForFunction(()=>Boolean(window.TMSVersions?.buildAppSource),null,{timeout:15000});
 await page.waitForSelector('#app-frame.ready',{timeout:45000});
-await page.evaluate(async()=>{if('serviceWorker'in navigator)await navigator.serviceWorker.ready;});
+const workerReady=await ensureServiceWorker(page);
+pass(Boolean(workerReady.scope),'Service worker is ready for P1-6 PWA checks',JSON.stringify(workerReady));
 
 const manifest=await page.evaluate(async()=>{
   const source=await fetch('app.html',{cache:'no-store'}).then(r=>r.text());
