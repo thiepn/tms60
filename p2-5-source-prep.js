@@ -65,7 +65,8 @@
 
     if (!patched.includes('runtime-translation-switch.js')) {
       const identityScript = `<script>window.__TMS60_BOOT_TRANSLATION__=${JSON.stringify(bootIdentity)};</script>`;
-      patched = patched.replace('</body>', `${identityScript}<script src="runtime-translation-switch.js"></script></body>`);
+      const runtimeScripts = '<script src="runtime-translation-switch.js"></script><script src="p2-8-localized-tts-reference.js"></script>';
+      patched = patched.replace('</body>', `${identityScript}${runtimeScripts}</body>`);
     }
     return patched;
   }
