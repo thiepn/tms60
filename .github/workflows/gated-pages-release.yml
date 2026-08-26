@@ -62,6 +62,8 @@ jobs:
             tests/guided-due-regression.mjs
             tests/p2-1-study-observer-scope.mjs
             tests/p2-2-app-bridge-observer-scope.mjs
+            tests/p2-3-service-worker-strategy.mjs
+            tests/p2-4-resilient-precache.mjs
             tests/rc1-bible-gate.mjs
             tests/rc1-localization-gate.mjs
             tests/rc1-final-gates.mjs
@@ -88,6 +90,8 @@ jobs:
             tests/guided-due-regression.mjs
             tests/p2-1-study-observer-scope.mjs
             tests/p2-2-app-bridge-observer-scope.mjs
+            tests/p2-3-service-worker-strategy.mjs
+            tests/p2-4-resilient-precache.mjs
             tests/rc1-bible-gate.mjs
             tests/rc1-localization-gate.mjs
             tests/rc1-final-gates.mjs
