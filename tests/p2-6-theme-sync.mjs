@@ -11,6 +11,11 @@ page.on('pageerror',error=>pageErrors.push(String(error)));
 const pass=(ok,name,detail='')=>{console.log(`${ok?'PASS':'FAIL'} ${name}${detail?' — '+detail:''}`);if(!ok)failures.push({name,detail})};
 
 await page.addInitScript(()=>{
+  // addInitScript runs again on every reload. Seed the baseline only on the
+  // first navigation so the regression can verify that imported/restored theme
+  // state actually persists across subsequent full reloads.
+  if(sessionStorage.getItem('tms60-p2-6-test-seeded')==='1')return;
+  sessionStorage.setItem('tms60-p2-6-test-seeded','1');
   localStorage.setItem('tms60-onboarding-v2','1');
   localStorage.setItem('tms60-onboarding-v3','1');
   localStorage.setItem('tms60-ui-language-v1','en');
