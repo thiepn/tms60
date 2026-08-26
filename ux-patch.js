@@ -115,18 +115,23 @@
     const bibleSelect = card.querySelector('#shell-version-select');
     if (!bibleSelect) return;
 
-    // App language and Bible version are independent. Always restore the full
-    // available Bible-version list regardless of the interface language.
+    // App language and Bible version are independent. Keep every available
+    // version visible, but do not rebuild identical <option> nodes on every
+    // Settings mutation; that previously created a self-sustaining render loop.
     const defs = versionDefinitions();
     if (defs.length) {
       const currentId = activeVersionId() || bibleSelect.value;
       const previous = bibleSelect.value;
-      bibleSelect.replaceChildren();
-      for (const def of defs) {
-        const option = document.createElement('option');
-        option.value = def.id;
-        option.textContent = `${def.name} (${def.short})`;
-        bibleSelect.appendChild(option);
+      const desiredSignature = defs.map(def => `${def.id}\u0000${def.name} (${def.short})`).join('\u0001');
+      const existingSignature = [...bibleSelect.options].map(option => `${option.value}\u0000${option.textContent}`).join('\u0001');
+      if (desiredSignature !== existingSignature) {
+        bibleSelect.replaceChildren();
+        for (const def of defs) {
+          const option = document.createElement('option');
+          option.value = def.id;
+          option.textContent = `${def.name} (${def.short})`;
+          bibleSelect.appendChild(option);
+        }
       }
       if (defs.some(def => def.id === currentId)) bibleSelect.value = currentId;
       else if (defs.some(def => def.id === previous)) bibleSelect.value = previous;
@@ -316,7 +321,6 @@
 
   const settingsRoot = document.getElementById('view-settings');
   if (settingsRoot) new MutationObserver(scheduleSettingsPatch).observe(settingsRoot, { childList: true, subtree: true });
-  new MutationObserver(scheduleSettingsPatch).observe(document.body, { childList: true, subtree: true });
 
   scheduleCompact();
   scheduleSettingsPatch();
