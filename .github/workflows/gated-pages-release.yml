@@ -1,0 +1,137 @@
+name: Gated Pages Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-release
+  cancel-in-progress: true
+
+jobs:
+  predeploy:
+    name: Test candidate before deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Serve candidate revision locally
+        run: |
+          nohup python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/tms60-candidate.log 2>&1 &
+          echo $! > /tmp/tms60-candidate.pid
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/tms60-candidate.log
+          exit 1
+
+      - name: Point regression suite at candidate revision
+        run: |
+          find tests -type f -name '*.mjs' -print0 | xargs -0 sed -i \
+            's#https://thiepn.github.io/tms60/#http://127.0.0.1:4173/#g'
+
+          GATED_TESTS=(
+            tests/p1-2-version-session-guard.mjs
+            tests/p1-3-reset-session-guard.mjs
+            tests/p1-4-localized-reference-recall.mjs
+            tests/p1-5-translation-tts.mjs
+            tests/p1-6-offline-stale-cache.mjs
+            tests/p1-7-temporary-fallback-preference.mjs
+            tests/qol-regression-v2.mjs
+            tests/guided-due-regression.mjs
+            tests/rc1-bible-gate.mjs
+            tests/rc1-localization-gate.mjs
+            tests/rc1-final-gates.mjs
+            tests/rc1-production-audit-continuation.mjs
+            tests/rc1-production-audit-v3.mjs
+          )
+
+          if grep -n 'https://thiepn.github.io/tms60/' "${GATED_TESTS[@]}"; then
+            echo 'A release-gated test still targets the already-deployed production site.'
+            exit 1
+          fi
+
+      - name: Run release-blocking regression suite
+        run: |
+          failed=0
+          GATED_TESTS=(
+            tests/p1-2-version-session-guard.mjs
+            tests/p1-3-reset-session-guard.mjs
+            tests/p1-4-localized-reference-recall.mjs
+            tests/p1-5-translation-tts.mjs
+            tests/p1-6-offline-stale-cache.mjs
+            tests/p1-7-temporary-fallback-preference.mjs
+            tests/qol-regression-v2.mjs
+            tests/guided-due-regression.mjs
+            tests/rc1-bible-gate.mjs
+            tests/rc1-localization-gate.mjs
+            tests/rc1-final-gates.mjs
+            tests/rc1-production-audit-continuation.mjs
+            tests/rc1-production-audit-v3.mjs
+          )
+
+          for test_file in "${GATED_TESTS[@]}"; do
+            echo "::group::$test_file"
+            if ! node "$test_file"; then
+              failed=1
+              echo "FAILED: $test_file"
+            fi
+            echo '::endgroup::'
+          done
+
+          if [ "$failed" -ne 0 ]; then
+            echo 'Candidate failed one or more release gates. Nothing will be deployed.'
+            exit 1
+          fi
+
+      - name: Stage exact tested revision
+        run: |
+          SITE="$RUNNER_TEMP/tms60-pages"
+          mkdir -p "$SITE"
+          git archive HEAD | tar -x -C "$SITE"
+          rm -rf "$SITE/.github" "$SITE/tests" "$SITE/worker"
+          test -f "$SITE/index.html"
+          test -f "$SITE/app.html"
+          echo "SITE_DIR=$SITE" >> "$GITHUB_ENV"
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload tested Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ env.SITE_DIR }}
+
+  deploy:
+    name: Deploy tested revision
+    needs: predeploy
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy gated Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
