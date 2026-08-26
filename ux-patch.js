@@ -16,7 +16,7 @@
   function scrollSessionTop() {
     requestAnimationFrame(() => {
       const content = document.querySelector('.content');
-      if (content && content.scrollTop) content.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      if (content) content.scrollTo({ top: 0, left: 0, behavior: 'auto' });
       window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     });
   }
@@ -26,16 +26,10 @@
     const style = document.createElement('style');
     style.id = 'tms60-session-ux-patch';
     style.textContent = `
-      .session-compact-line{
-        margin:0 0 10px;padding:2px 4px;text-align:center;
-        font-size:.88rem;line-height:1.35;font-weight:760;color:var(--muted);
-        letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-      }
       .prompt.prompt-compact{padding:8px 0 14px}
       .prompt.prompt-compact .prompt-help{margin-top:0}
       .session-end-bottom{margin-top:12px}
       @media(max-width:760px){
-        .session-compact-line{margin-bottom:8px;font-size:.84rem}
         .prompt.prompt-compact{padding:5px 0 12px}
         #view-study .study-shell{gap:10px}
         #view-study .study-card{min-height:0}
@@ -78,21 +72,15 @@
     const verse = activeSessionVerse();
     if (!root || !task || !verse || !session?.tasks?.length || session.index >= session.tasks.length) return;
 
-    // The old session heading and toolbar duplicated information and, during
-    // reference recall, exposed the exact answer. Replace both with one line.
+    // Remove the redundant multi-line session chrome. The lightweight QoL
+    // session strip supplies the one safe line that remains.
     root.querySelector('.page-head')?.remove();
     root.querySelector('.study-toolbar')?.remove();
     root.querySelector('.study-meta')?.remove();
     root.querySelectorAll('.prompt-ref').forEach(el => el.remove());
     root.querySelectorAll('.prompt').forEach(el => el.classList.add('prompt-compact'));
 
-    const line = document.createElement('div');
-    line.className = 'session-compact-line';
-    line.textContent = task.mode === 'reference' ? 'Reference recall' : verse.reference;
-    const shell = root.querySelector('.study-shell');
-    if (shell) root.insertBefore(line, shell);
-
-    // Do not give the reference away in the current queue item either.
+    // Do not leak the reference answer anywhere during reference recall.
     if (task.mode === 'reference') {
       root.querySelectorAll('.queue-item').forEach(item => {
         const label = item.querySelectorAll('span')[1];
@@ -100,14 +88,12 @@
       });
     }
 
-    // A reference-recall field should not contain an example that hints at
-    // the answer format/content.
     const referenceInput = root.querySelector('#reference-answer');
     if (referenceInput) referenceInput.removeAttribute('placeholder');
 
     hideBuildOpeningPhrase(root, task, verse);
 
-    // Keep session exit available without filling the top of the screen.
+    // Keep session exit available without occupying the top of the exercise.
     const footer = root.querySelector('.study-footer');
     if (footer && !footer.querySelector('[data-patch-end-session]')) {
       const end = document.createElement('button');
@@ -140,8 +126,8 @@
     return result;
   };
 
-  // Fix phrase stepping before the app's older click handler can skip from
-  // hidden state directly to two visible phrases.
+  // Build mode now begins with every phrase hidden. Reveal exactly one phrase
+  // per click/Space and continue without forcing a rating after acquisition.
   document.addEventListener('click', event => {
     const buildNext = event.target.closest?.('[data-action="next-phrase"]');
     if (buildNext && activeSessionTask()?.mode === 'build') {
@@ -170,23 +156,7 @@
     if (!task || !document.getElementById('view-study')?.classList.contains('active')) return;
     const active = document.activeElement;
 
-    // Mobile/keyboard cloze flow: Space moves to the next blank instead of
-    // inserting a space. On the final blank it focuses the Check button, so
-    // Enter continues naturally.
-    if (event.code === 'Space' && active?.classList?.contains('cloze-input') && !session.exercise.checked) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      const inputs = [...document.querySelectorAll('.cloze-input:not(:disabled)')];
-      const index = inputs.indexOf(active);
-      const next = inputs[index + 1];
-      if (next) next.focus({ preventScroll: true });
-      else document.querySelector('[data-action="check-cloze"]')?.focus({ preventScroll: true });
-      return;
-    }
-
-    // Build mode starts with every phrase hidden. Space reveals exactly one
-    // phrase at a time; after the final phrase it moves focus to Continue.
-    if (event.code === 'Space' && task.mode === 'build' && !['INPUT','TEXTAREA','SELECT'].includes(active?.tagName)) {
+    if ((event.code === 'Space' || event.key === ' ') && task.mode === 'build' && !['INPUT','TEXTAREA','SELECT'].includes(active?.tagName)) {
       const verse = activeSessionVerse();
       const phrases = verse ? phraseSplit(verse.text) : [];
       const current = Number.isFinite(session.exercise.phraseIndex) ? session.exercise.phraseIndex : 0;
@@ -201,6 +171,5 @@
     }
   }, true);
 
-  // Apply to any already-rendered active session when the patch loads.
   renderStudy();
 })();
