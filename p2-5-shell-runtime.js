@@ -16,7 +16,7 @@
     const runtime = frame.contentWindow?.TMSRuntimeTranslation;
     if (!runtime) return false;
     const def = getVersion(activeVersion);
-    runtime.initialize({ id: activeVersion, short: def.short, saveKey: def.saveKey, copyright: runtimeCopyright() });
+    runtime.initialize({ id: activeVersion, short: def.short, name: def.name, saveKey: def.saveKey, copyright: runtimeCopyright() });
     return true;
   }
 
@@ -85,6 +85,7 @@
       runtime.switchDataset({
         id,
         short: target.short,
+        name: target.name,
         saveKey: target.saveKey,
         verses: dataset.verses,
         copyright: dataset.copyright || ''
@@ -117,4 +118,5 @@
   }
 
   window.__TMS60_P25_SHELL_RUNTIME__ = '1.0.0';
+  window.__TMS60_P27_SHELL_IDENTITY__ = '1.0.0';
 })();
