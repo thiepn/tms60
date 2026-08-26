@@ -3,17 +3,24 @@
  * the VERSES array remains mutable and KEY/SNAP_KEY become mutable bindings.
  * This bridge then swaps only the 60-verse dataset and translation-specific state,
  * without navigating or replacing the application iframe.
+ *
+ * P2-7: this bridge also owns exported-backup translation identity. Normal JSON
+ * backups carry both a backward-compatible application label and structured
+ * Bible-version metadata derived from the currently active runtime translation.
  */
 'use strict';
 (() => {
   if (window.__TMS60_P25_RUNTIME_TRANSLATION__) return;
 
   const MARKER = '1.0.1';
+  const BACKUP_MARKER = '1.0.0';
   const volatileStates = new Map();
+  const bootMeta = window.__TMS60_BOOT_TRANSLATION__ || {};
   let currentMeta = {
-    id: '',
-    short: String(document.querySelector('.brand-sub')?.textContent || '').replace(/^Exact\s+|\s+recall$/g, '') || 'ESV',
-    saveKey: typeof KEY === 'string' ? KEY : '',
+    id: String(bootMeta.id || 'esv').trim() || 'esv',
+    short: String(bootMeta.short || document.querySelector('.brand-sub')?.textContent || '').replace(/^Exact\s+|\s+recall$/g, '').trim() || 'ESV',
+    name: String(bootMeta.name || 'English Standard Version').trim() || 'English Standard Version',
+    saveKey: String(bootMeta.saveKey || (typeof KEY === 'string' ? KEY : '')).trim(),
     copyright: String(document.getElementById('translation-copyright')?.textContent || '').trim()
   };
 
@@ -24,10 +31,11 @@
   function normalizeMeta(meta = {}) {
     const id = String(meta.id || '').trim();
     const short = String(meta.short || '').trim();
+    const name = String(meta.name || short).replace(/\s+/g, ' ').trim();
     const saveKey = String(meta.saveKey || '').trim();
     const copyright = String(meta.copyright || '').replace(/\s+/g, ' ').trim();
-    if (!id || !short || !saveKey) throw new Error('Translation metadata is incomplete.');
-    return { id, short, saveKey, copyright };
+    if (!id || !short || !name || !saveKey) throw new Error('Translation metadata is incomplete.');
+    return { id, short, name, saveKey, copyright };
   }
 
   function normalizeVerses(verses) {
@@ -69,6 +77,21 @@
     if (brand) brand.textContent = `Exact ${meta.short} recall`;
     document.documentElement.dataset.bibleVersion = meta.id;
     setCopyright(meta.copyright);
+  }
+
+  function publishTranslationMeta(meta) {
+    const normalized = normalizeMeta(meta);
+    currentMeta = normalized;
+    window.__TMS60_ACTIVE_TRANSLATION__ = Object.freeze({ ...normalized });
+    window.__TMS60_BACKUP_TRANSLATION__ = Object.freeze({
+      application: `TMS 60 ${normalized.short} Memory Lab`,
+      bibleVersion: Object.freeze({
+        id: normalized.id,
+        short: normalized.short,
+        name: normalized.name
+      })
+    });
+    return normalized;
   }
 
   function requestParentLocalization() {
@@ -142,9 +165,8 @@
   }
 
   function initialize(meta) {
-    currentMeta = normalizeMeta(meta);
+    currentMeta = publishTranslationMeta(meta);
     setVisibleTranslationMeta(currentMeta);
-    window.__TMS60_ACTIVE_TRANSLATION__ = Object.freeze({ ...currentMeta });
     scheduleParentLocalization();
     return inspect();
   }
@@ -179,8 +201,8 @@
       setVisibleTranslationMeta(currentMeta);
       renderForView(previousView);
       setVisibleTranslationMeta(currentMeta);
-      window.__TMS60_ACTIVE_TRANSLATION__ = Object.freeze({ ...currentMeta });
-      document.dispatchEvent(new CustomEvent('tms60:translation-switched', { detail: { id: currentMeta.id, short: currentMeta.short } }));
+      publishTranslationMeta(currentMeta);
+      document.dispatchEvent(new CustomEvent('tms60:translation-switched', { detail: { id: currentMeta.id, short: currentMeta.short, name: currentMeta.name } }));
       scheduleParentLocalization();
       return inspect();
     } catch (error) {
@@ -197,7 +219,7 @@
       applyTheme();
       renderForView(previousView);
       setVisibleTranslationMeta(currentMeta);
-      window.__TMS60_ACTIVE_TRANSLATION__ = Object.freeze({ ...currentMeta });
+      publishTranslationMeta(currentMeta);
       scheduleParentLocalization();
       throw error;
     }
@@ -208,6 +230,7 @@
       marker: MARKER,
       id: currentMeta.id,
       short: currentMeta.short,
+      name: currentMeta.name,
       saveKey: KEY,
       verseCount: VERSES.length,
       firstReference: VERSES[0]?.reference || '',
@@ -217,22 +240,42 @@
     };
   }
 
-  // Keep backup identity aligned with an in-place translation switch. The cold
-  // boot source still receives its historical string substitution, while runtime
-  // switches no longer need to rebuild that source just to update this metadata.
-  const nativeExportJSON = exportJSON;
+  // P2-7: export identity comes from the live runtime translation rather than a
+  // source-level ESV string. The emergency protected-save path keeps raw bytes
+  // untouched; its filename carries the active translation id instead.
   exportJSON = function exportRuntimeTranslationJSON() {
-    if (storageWriteBlocked) return nativeExportJSON();
+    const identity = window.__TMS60_BACKUP_TRANSLATION__ || {
+      application: `TMS 60 ${currentMeta.short} Memory Lab`,
+      bibleVersion: { id: currentMeta.id, short: currentMeta.short, name: currentMeta.name }
+    };
+
+    if (storageWriteBlocked) {
+      const preserved = rawGet();
+      if (preserved) {
+        const safeId = String(identity.bibleVersion?.id || currentMeta.id || 'unknown').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
+        download(`tms60-${safeId}-preserved-save-${localDayKey()}.json`, preserved, 'application/json');
+        toast('The protected raw save was exported without modification.');
+        return;
+      }
+    }
+
     const payload = {
       ...state,
       verseDataset: VERSES.map(v => ({ id: v.id, reference: v.reference, text: v.text, pack: v.pack, packName: v.packName, positionInPack: v.positionInPack, scheduledDate: v.scheduledDate })),
       exportedAt: new Date().toISOString(),
-      application: `TMS 60 ${currentMeta.short} Memory Lab`
+      application: identity.application,
+      bibleVersion: { ...identity.bibleVersion }
     };
     download(`tms60-backup-${localDayKey()}.json`, JSON.stringify(payload, null, 2));
     toast('Progress backup exported.');
   };
 
+  // Source preparation injects exact cold-boot metadata before this script. Make
+  // the backup identity valid immediately, without waiting for the parent shell's
+  // post-load initialization task.
+  publishTranslationMeta(currentMeta);
+
   window.TMSRuntimeTranslation = Object.freeze({ initialize, switchDataset, inspect });
   window.__TMS60_P25_RUNTIME_TRANSLATION__ = MARKER;
+  window.__TMS60_P27_BACKUP_IDENTITY__ = BACKUP_MARKER;
 })();
