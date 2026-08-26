@@ -1,6 +1,6 @@
 'use strict';
-const CACHE='tms60-stability34-2026-08-27';
-const CORE=['./','./index.html','./app.html','./translations.js','./p2-5-source-prep.js','./p2-5-shell-runtime.js','./p2-6-theme-sync.js','./runtime-translation-switch.js','./niv-service.json','./enhancements.js','./enhancements-legacy.js','./rc3-hardening.js','./language-switch-hardening.js','./guided-learning-chain.js','./qol-fast-recall.js','./qol-cloze-helpers.js','./qol-word-navigation.js','./ux-patch.js','./enhancements-core.js','./localization-runtime.js','./localization-completion.js','./favicon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
+const CACHE='tms60-stability35-2026-08-27';
+const CORE=['./','./index.html','./app.html','./translations.js','./p2-5-source-prep.js','./p2-5-shell-runtime.js','./p2-6-theme-sync.js','./runtime-translation-switch.js','./p2-8-localized-tts-reference.js','./niv-service.json','./enhancements.js','./enhancements-legacy.js','./rc3-hardening.js','./language-switch-hardening.js','./guided-learning-chain.js','./qol-fast-recall.js','./qol-cloze-helpers.js','./qol-word-navigation.js','./ux-patch.js','./enhancements-core.js','./localization-runtime.js','./localization-completion.js','./favicon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
 const STATIC_ASSETS=new Set(['./favicon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'].map(url=>new URL(url,self.location.href).pathname));
 
 function cacheSuccessful(request,response){
