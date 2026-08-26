@@ -1,6 +1,10 @@
 (() => {
   'use strict';
 
+  const SHELL_THEME_KEY = 'tms60-global-theme-v1';
+  const THEME_APPEARANCES = new Set(['light', 'dark']);
+  const THEME_ACCENTS = new Set(['neutral', 'blue', 'green', 'red', 'purple', 'brown', 'orange', 'magenta']);
+
   let lastTaskId = null;
   let compactScheduled = false;
 
@@ -10,6 +14,29 @@
 
   function verse() {
     try { return typeof currentVerse === 'function' ? currentVerse() : null; } catch (_) { return null; }
+  }
+
+  function syncShellThemeFromApp(syncParent = false) {
+    const appearance = document.documentElement.dataset.mode;
+    const accent = document.documentElement.dataset.accent;
+    if (!THEME_APPEARANCES.has(appearance) || !THEME_ACCENTS.has(accent)) return;
+
+    try {
+      localStorage.setItem(SHELL_THEME_KEY, JSON.stringify({ appearance, accent }));
+    } catch (_) {}
+
+    // index.html owns the outer shell theme. The top quick-toggle lives inside
+    // the iframe, so explicitly keep the shell's in-memory selection aligned.
+    // Otherwise the shell can re-apply its previous mode on the next reload or
+    // translation switch even though the inner app saved the new mode correctly.
+    if (!syncParent || window.parent === window) return;
+    try {
+      const parentDoc = window.parent.document;
+      const modeButton = parentDoc.querySelector(`[data-mode-choice="${appearance}"]`);
+      const accentButton = parentDoc.querySelector(`[data-accent-choice="${accent}"]`);
+      if (modeButton && !modeButton.classList.contains('active')) modeButton.click();
+      if (accentButton && !accentButton.classList.contains('active')) accentButton.click();
+    } catch (_) {}
   }
 
   function scrollSessionTop() {
@@ -125,6 +152,14 @@
   }
 
   document.addEventListener('click', event => {
+    const themeAction = event.target.closest?.('[data-action]')?.dataset.action;
+    if (themeAction === 'toggle-appearance') {
+      // Run after the app's own click handler has changed data-mode.
+      setTimeout(() => syncShellThemeFromApp(true), 0);
+    } else if (themeAction === 'set-appearance' || themeAction === 'set-accent') {
+      setTimeout(() => syncShellThemeFromApp(false), 0);
+    }
+
     const buildNext = event.target.closest?.('[data-action="next-phrase"]');
     if (buildNext && task()?.mode === 'build') {
       event.preventDefault();
