@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_WORD_NAV_QOL__) return;
-  window.__TMS60_WORD_NAV_QOL__ = '1.4.0';
+  window.__TMS60_WORD_NAV_QOL__ = '1.5.0';
 
   const EMPTY_GUARD_KEY = 'tms60-qol-empty-advance-guard-v1';
 
@@ -88,6 +88,26 @@
     focusTarget(input,false);
   };
 
+  const advanceFromInput = input => {
+    const inputs = clozeInputs();
+    const index = inputs.indexOf(input);
+    if (index < 0) return false;
+
+    if (readEmptyGuard() && !String(input.value || '').trim()) {
+      blockEmptyAdvance(input);
+      return true;
+    }
+
+    if (index < inputs.length - 1) {
+      focusTarget(inputs[index + 1], false);
+      return true;
+    }
+
+    const action = nextFocusableAfter(input);
+    if (action) return focusTarget(action, true);
+    return false;
+  };
+
   document.addEventListener('keydown', event => {
     if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
     const input = event.target?.closest?.('.cloze-input:not(:disabled)');
@@ -110,23 +130,23 @@
       : (event.key === 'Tab' && !event.shiftKey);
     if (!advance) return;
 
-    if (readEmptyGuard() && !String(input.value || '').trim()) {
-      event.preventDefault();
-      event.stopPropagation();
-      blockEmptyAdvance(input);
-      return;
-    }
+    event.preventDefault();
+    event.stopPropagation();
+    advanceFromInput(input);
+  }, true);
+
+  // Android/iOS IMEs do not consistently emit a useful Space keydown. Catch
+  // the actual text-insertion intent before the space enters a one-word blank.
+  document.addEventListener('beforeinput', event => {
+    if (event.defaultPrevented || event.isComposing || !isMobileInputMode()) return;
+    const input = event.target?.closest?.('.cloze-input:not(:disabled)');
+    if (!input) return;
+    const data = String(event.data ?? '');
+    if (event.inputType !== 'insertText' || !/^\s+$/u.test(data)) return;
 
     event.preventDefault();
     event.stopPropagation();
-
-    if (index < inputs.length - 1) {
-      focusTarget(inputs[index + 1], false);
-      return;
-    }
-
-    const action = nextFocusableAfter(input);
-    if (action) focusTarget(action, true);
+    advanceFromInput(input);
   }, true);
 
   document.addEventListener('paste', event => {
