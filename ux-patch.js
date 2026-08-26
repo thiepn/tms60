@@ -89,13 +89,26 @@
     const copyright = document.getElementById('translation-copyright');
 
     // Licensed translations may require the attribution to remain visible, but
-    // it must never be a fixed overlay over the mobile navigation.
+    // it must never be a fixed overlay over the mobile navigation. Keep the
+    // source node outside the re-rendered Settings tree and mirror it there.
     if (copyright) {
-      copyright.classList.add('translation-license-note');
-      copyright.removeAttribute('style');
-      copyright.setAttribute('role', 'note');
-      copyright.setAttribute('aria-label', 'Bible translation copyright');
-      if (card && copyright.parentElement !== card) card.appendChild(copyright);
+      if (card) {
+        copyright.hidden = true;
+        let copy = card.querySelector('[data-translation-license-copy]');
+        if (!copy) {
+          copy = document.createElement('div');
+          copy.dataset.translationLicenseCopy = '1';
+          copy.className = 'translation-license-note';
+          copy.setAttribute('role', 'note');
+          copy.setAttribute('aria-label', 'Bible translation copyright');
+          card.appendChild(copy);
+        }
+        if (copy.textContent !== copyright.textContent) copy.textContent = copyright.textContent;
+      } else {
+        copyright.hidden = false;
+        copyright.classList.add('translation-license-note');
+        copyright.removeAttribute('style');
+      }
     }
 
     if (!card || card.dataset.languagePickerInstalled === '1') return;
