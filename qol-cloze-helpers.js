@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_CLOZE_HELPERS_QOL__) return;
-  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.7.0';
+  window.__TMS60_CLOZE_HELPERS_QOL__ = '1.7.1';
 
   const EMPTY_GUARD_KEY = 'tms60-qol-empty-advance-guard-v1';
   const MOBILE_MODE = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
@@ -34,6 +34,7 @@
 
   let lastPointerAt = 0;
   let mobilePositionToken = 0;
+  let lastClozeLine = null;
   document.addEventListener('pointerdown',()=>{lastPointerAt=performance.now();},true);
 
   const studyRoot = () => document.getElementById('view-study');
@@ -154,6 +155,11 @@
   const refreshClozeHelpers = () => {
     clearTimeout(timer);
     timer = setTimeout(() => {
+      const root = studyRoot();
+      const line = root?.querySelector('.cloze-line') || null;
+      const freshRender = Boolean(line && line !== lastClozeLine);
+      lastClozeLine = line;
+
       applyFixOnlyMode();
       updateCounter();
       injectFixErrorsButton();
@@ -163,14 +169,25 @@
       if (typeof currentTask === 'function' && currentTask()?.mode !== 'cloze') return;
       if (typeof session === 'object' && session?.exercise?.checked) return;
 
+      const firstEmpty = inputs.find(input => !String(input.value || '').trim());
+      const target = firstEmpty || inputs[inputs.length - 1];
+
+      // Core rendering always focuses the first cloze input. On a fresh render
+      // (for example after restoring an unfinished draft), that focus is only a
+      // render default, not an explicit user navigation choice. Move to the
+      // first unfinished blank once, then preserve deliberate focus thereafter.
+      if (freshRender) {
+        focusClozeInput(target);
+        updateCounter();
+        return;
+      }
+
       const active = document.activeElement;
       if (inputs.includes(active)) {
         updateCounter();
         return;
       }
 
-      const firstEmpty = inputs.find(input => !String(input.value || '').trim());
-      const target = firstEmpty || inputs[inputs.length - 1];
       focusClozeInput(target);
       updateCounter();
     }, 70);
