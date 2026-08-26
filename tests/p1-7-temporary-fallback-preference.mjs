@@ -10,11 +10,13 @@ const page=await context.newPage();
 const failures=[];
 const pass=(ok,name,detail='')=>{console.log(`${ok?'PASS':'FAIL'} ${name}${detail?' — '+detail:''}`);if(!ok)failures.push({name,detail})};
 
+// Do not initialize the Bible-version preference here: addInitScript also runs
+// for srcdoc child frames, so touching VERSION_KEY in this hook could mask or
+// manufacture the exact persistence bug this regression is meant to detect.
 await page.addInitScript(()=>{
   localStorage.setItem('tms60-onboarding-v2','1');
   localStorage.setItem('tms60-onboarding-v3','1');
   localStorage.setItem('tms60-ui-language-v1','en');
-  if(!localStorage.getItem('tms60-active-translation-v1'))localStorage.setItem('tms60-active-translation-v1','esv');
 });
 
 await page.goto(APP,{waitUntil:'domcontentloaded',timeout:45000});
