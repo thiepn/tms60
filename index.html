@@ -144,8 +144,43 @@ function injectVersionSettings(doc){
 }
 function attachAppBridge(doc){
   relabelNeutral(doc);injectVersionSettings(doc);
-  const observer=new MutationObserver(()=>{relabelNeutral(doc);injectVersionSettings(doc)});
-  observer.observe(doc.body,{childList:true,subtree:true});
+  window.__TMS60_APP_BRIDGE_SCOPE__='2.2.0';
+  const stats={settingsBindings:0,settingsMutationCallbacks:0,rootChecks:0,settingsSyncs:0};
+  window.__TMS60_APP_BRIDGE_STATS__=stats;
+  let settingsRoot=null;
+  let settingsObserver=null;
+  let syncQueued=false;
+  const syncSettingsBridge=()=>{
+    syncQueued=false;
+    stats.settingsSyncs++;
+    relabelNeutral(doc);
+    injectVersionSettings(doc);
+  };
+  const scheduleSettingsBridge=()=>{
+    if(syncQueued)return;
+    syncQueued=true;
+    requestAnimationFrame(syncSettingsBridge);
+  };
+  const bindSettingsObserver=()=>{
+    const next=doc.getElementById('view-settings');
+    if(!next||next===settingsRoot)return Boolean(next);
+    settingsObserver?.disconnect();
+    settingsRoot=next;
+    settingsObserver=new MutationObserver(()=>{stats.settingsMutationCallbacks++;scheduleSettingsBridge()});
+    settingsObserver.observe(settingsRoot,{childList:true,subtree:true});
+    stats.settingsBindings++;
+    return true;
+  };
+  bindSettingsObserver();
+  const contentRoot=doc.querySelector('.content');
+  if(contentRoot){
+    const rootObserver=new MutationObserver(()=>{
+      stats.rootChecks++;
+      const live=doc.getElementById('view-settings');
+      if(live!==settingsRoot){bindSettingsObserver();scheduleSettingsBridge()}
+    });
+    rootObserver.observe(contentRoot,{childList:true});
+  }
   doc.addEventListener('change',event=>{if(event.target.id==='shell-version-select'){const id=event.target.value;if(id&&id!==activeVersion)activateVersion(id)}});
   doc.addEventListener('click',event=>{
     const button=event.target.closest?.('[data-action]');if(!button)return;
