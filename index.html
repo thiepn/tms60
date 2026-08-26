@@ -122,7 +122,13 @@ function chooseInsideApp(kind,value){const doc=frame.contentDocument;if(!doc)ret
 function applySelectedTheme(){chooseInsideApp('appearance',selected.appearance);chooseInsideApp('accent',selected.accent);relabelNeutral(frame.contentDocument);syncChoices()}
 function openOnboarding(){selectedVersion=activeVersion;onboarding.classList.remove('hidden');syncChoices();setTimeout(()=>document.querySelector('[data-version-choice].active,.choice.active,.accent.active')?.focus(),0)}
 function closeOnboarding(){onboarding.classList.add('hidden')}
-function getBaseSource(){if(!baseSourcePromise)baseSourcePromise=fetch('app.html',{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error(`Could not load app.html (${r.status}).`);return r.text()});return baseSourcePromise}
+function getBaseSource(){
+  if(!baseSourcePromise)baseSourcePromise=fetch('app.html',{cache:'no-cache'}).then(r=>{
+    if(!r.ok)throw new Error(`Could not load app.html (${r.status}).`);
+    return r.text();
+  }).then(source=>source.replace('</body>','<script src="ux-patch.js"><\\/script></body>'));
+  return baseSourcePromise
+}
 
 function versionOptionsHTML(){return window.TMSVersions.list().map(def=>`<option value="${def.id}" ${def.id===activeVersion?'selected':''} ${def.available?'':'disabled'}>${def.name} (${def.short})${def.available?'':' — pending source'}</option>`).join('')}
 function injectVersionSettings(doc){
