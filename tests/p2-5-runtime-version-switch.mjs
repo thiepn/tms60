@@ -35,12 +35,26 @@ await page.waitForSelector('#app-frame.ready',{timeout:45000});
 await page.waitForFunction(()=>window.__TMS60_P25_SOURCE_PREP__==='1.0.0'&&window.__TMS60_P25_SHELL_RUNTIME__==='1.0.0',null,{timeout:15000});
 let frame=page.frames().find(f=>f!==page.mainFrame());
 await frame.waitForFunction(()=>window.__TMS60_P25_RUNTIME_TRANSLATION__==='1.0.1',null,{timeout:15000});
-await page.waitForTimeout(250);
+await page.waitForTimeout(1000);
 
 pass(Boolean(frame),'App iframe boots once');
 pass(await page.evaluate(()=>window.__TMS60_P25_SOURCE_PREP__)==='1.0.0','P2-5 lightweight source preparation loaded');
 pass(await page.evaluate(()=>window.__TMS60_P25_SHELL_RUNTIME__)==='1.0.0','P2-5 shell runtime loaded');
 pass(await frame.evaluate(()=>window.__TMS60_P25_RUNTIME_TRANSLATION__)==='1.0.1','P2-5 in-frame runtime bridge loaded');
+const localizationReady=await page.evaluate(()=>({
+  runtime:Boolean(window.__TMS_LOCALIZATION_RUNTIME__),
+  completion:Boolean(window.__TMS_LOCALIZATION_COMPLETION__),
+  runtimeScript:Boolean(document.querySelector('script[data-tms-localization-runtime]')),
+  completionScript:Boolean(document.querySelector('script[data-tms-localization-completion]'))
+}));
+const localizationFrameReady=await frame.evaluate(()=>({
+  runtime:document.documentElement.dataset.tmsLocalizationRuntime||'',
+  hardening:window.__TMS60_LANGUAGE_SWITCH_HARDENING__||'',
+  guard:window.__TMS60_IFRAME_LOCALIZATION_GUARD__||''
+}));
+console.log('P2-5 localization runtime diagnostics',JSON.stringify({parent:localizationReady,frame:localizationFrameReady}));
+pass(localizationReady.runtime&&localizationReady.runtimeScript,'Parent localization runtime is loaded',JSON.stringify(localizationReady));
+pass(localizationFrameReady.runtime==='loaded','Parent localization runtime is attached to app document',JSON.stringify(localizationFrameReady));
 
 await frame.evaluate(()=>switchView('settings'));
 await frame.waitForSelector('#shell-version-select',{timeout:10000});
@@ -54,8 +68,6 @@ const identity=await frame.evaluate(()=>{
   return {timeOrigin:performance.timeOrigin,href:location.href};
 });
 
-// Verify translation-specific progress stays separated even though the document
-// itself is no longer destroyed between version changes.
 await frame.evaluate(()=>{state.progress[1].stage=6;save();});
 let ok=await page.evaluate(()=>activateVersion('niv'));
 pass(ok===true,'ESV -> NIV runtime switch succeeds');
@@ -124,16 +136,15 @@ async function localizationSnapshot(){
   return frame.evaluate(()=>({
     saved:window.top.localStorage.getItem('tms60-ui-language-v1')||'',
     select:document.querySelector('#ui-language-select')?.value||'',
+    htmlLang:document.documentElement.lang,
+    runtime:document.documentElement.dataset.tmsLocalizationRuntime||'',
     nav:[...document.querySelectorAll('#desktop-nav [data-view] span:last-child')].map(x=>x.textContent.trim())
   }));
 }
 
-// Localization is independent of Bible wording and must survive an in-place
-// translation swap without forcing the user back to English. The iframe's legacy
-// localization guard intentionally reports English from its own localStorage API,
-// so the canonical preference is read from the parent-owned store here.
 await setUiLanguage('de');
 const deBefore=await localizationSnapshot();
+console.log('German before runtime switch',JSON.stringify(deBefore));
 pass(deBefore.saved==='de'&&deBefore.select==='de','German UI preference changes through canonical parent-owned path',JSON.stringify(deBefore));
 pass(deBefore.nav[0]==='Heute'&&deBefore.nav[1]==='Lernen','German navigation localizes before Bible switch',deBefore.nav.join(' / '));
 ok=await page.evaluate(()=>activateVersion('hfa'));
@@ -145,6 +156,7 @@ pass(de.nav[0]==='Heute'&&de.nav[1]==='Lernen','German navigation remains locali
 
 await setUiLanguage('ko');
 const koBefore=await localizationSnapshot();
+console.log('Korean before runtime switch',JSON.stringify(koBefore));
 pass(koBefore.saved==='ko'&&koBefore.select==='ko','Korean UI preference changes through canonical parent-owned path',JSON.stringify(koBefore));
 pass(koBefore.nav[0]==='오늘'&&koBefore.nav[1]==='학습','Korean navigation localizes before Bible switch',koBefore.nav.join(' / '));
 ok=await page.evaluate(()=>activateVersion('klb1985'));
@@ -154,8 +166,6 @@ pass(ok===true,'Korean UI survives runtime Bible switch');
 pass(ko.saved==='ko'&&ko.select==='ko','Korean UI preference remains selected',JSON.stringify(ko));
 pass(ko.nav[0]==='오늘'&&ko.nav[1]==='학습','Korean navigation remains localized after Bible switch',ko.nav.join(' / '));
 
-// Defense in depth: even a direct programmatic call must not swap wording while
-// a study session is active. This is stricter than the disabled Settings control.
 await setUiLanguage('en');
 await frame.evaluate(()=>startSingleVersePractice(1,'flashcard'));
 const beforeBlocked=await frame.evaluate(()=>({info:window.TMSRuntimeTranslation.inspect(),task:{...currentTask()},sentinel:window.__P25_SENTINEL__}));
