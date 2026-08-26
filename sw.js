@@ -1,5 +1,5 @@
 'use strict';
-const CACHE='tms60-stability29-2026-08-26';
+const CACHE='tms60-stability30-2026-08-26';
 const CORE=['./','./index.html','./app.html','./translations.js','./niv-service.json','./enhancements.js','./enhancements-legacy.js','./rc3-hardening.js','./language-switch-hardening.js','./guided-learning-chain.js','./qol-fast-recall.js','./qol-cloze-helpers.js','./qol-word-navigation.js','./ux-patch.js','./enhancements-core.js','./localization-runtime.js','./localization-completion.js','./favicon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
 const STATIC_ASSETS=new Set(['./favicon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'].map(url=>new URL(url,self.location.href).pathname));
 
@@ -39,14 +39,50 @@ async function cacheFirst(request){
   }
 }
 
+async function previousCachedResponse(request){
+  try{
+    const names=(await caches.keys()).filter(name=>name!==CACHE&&name.startsWith('tms60-')).reverse();
+    for(const name of names){
+      const cache=await caches.open(name);
+      const hit=await cache.match(request);
+      if(hit)return hit;
+    }
+  }catch(_){/* A previous-cache lookup must never make installation fatal. */}
+  return null;
+}
+
+async function precacheAsset(cache,url){
+  const request=new Request(new URL(url,self.location.href));
+  try{
+    const response=await fetch(url,{cache:'reload'});
+    if(response&&response.ok){
+      await cache.put(request,response);
+      return {url,source:'network'};
+    }
+  }catch(_){/* Fall through to the previous installed cache. */}
+
+  try{
+    const fallback=await previousCachedResponse(request);
+    if(fallback){
+      await cache.put(request,fallback.clone());
+      return {url,source:'previous-cache'};
+    }
+  }catch(_){/* This asset can be repaired by normal runtime caching later. */}
+
+  return {url,source:'missing'};
+}
+
 self.addEventListener('install',event=>{
   event.waitUntil((async()=>{
     const cache=await caches.open(CACHE);
-    await Promise.all(CORE.map(async url=>{
-      const response=await fetch(url,{cache:'reload'});
-      if(!response.ok)throw new Error(`Failed to precache ${url}: ${response.status}`);
-      await cache.put(url,response);
-    }));
+    const results=await Promise.allSettled(CORE.map(url=>precacheAsset(cache,url)));
+    const unavailable=results.filter(result=>result.status==='rejected'||result.value?.source==='missing');
+    if(unavailable.length)console.warn(`TMS60 precache completed with ${unavailable.length} unavailable asset(s); runtime caching will retry them.`);
+
+    const shell=(await cache.match(new Request(new URL('./index.html',self.location.href))))
+      ||(await cache.match(new Request(new URL('./',self.location.href))));
+    if(!shell)throw new Error('TMS60 precache could not preserve any usable app shell.');
+
     await self.skipWaiting();
   })());
 });
