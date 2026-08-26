@@ -23,6 +23,17 @@
     try { return typeof currentVerse === 'function' ? currentVerse() : null; } catch (_) { return null; }
   }
 
+  function hasProtectedSession() {
+    try {
+      if (typeof hasActiveSession === 'function') return Boolean(hasActiveSession());
+    } catch (_) {}
+    try {
+      return Boolean(task() && typeof session === 'object' && session?.tasks?.length && session.index < session.tasks.length);
+    } catch (_) {
+      return false;
+    }
+  }
+
   function shell() {
     try { return window.parent !== window ? window.parent : window; } catch (_) { return window; }
   }
@@ -68,6 +79,25 @@
       const accentButton = parentDoc.querySelector(`[data-accent-choice="${accent}"]`);
       if (modeButton && !modeButton.classList.contains('active')) modeButton.click();
       if (accentButton && !accentButton.classList.contains('active')) accentButton.click();
+    } catch (_) {}
+  }
+
+  function syncVersionSwitchLock() {
+    const select = document.getElementById('shell-version-select');
+    if (!select) return;
+    const locked = hasProtectedSession();
+    select.disabled = locked;
+    select.dataset.sessionLocked = locked ? '1' : '0';
+    if (locked) {
+      const active = activeVersionId();
+      if (active && select.value !== active) select.value = active;
+    }
+  }
+
+  function returnToProtectedSession() {
+    try {
+      if (typeof switchView === 'function') switchView('study');
+      else document.querySelector('[data-view="study"]')?.click();
     } catch (_) {}
   }
 
@@ -241,6 +271,8 @@
       if (wrapper === card) continue;
       if (!wrapper.contains(languageSelect)) wrapper.remove();
     }
+
+    syncVersionSwitchLock();
   }
 
   function scheduleSettingsPatch() {
@@ -281,6 +313,7 @@
   function compactStudy() {
     compactScheduled = false;
     addStyles();
+    syncVersionSwitchLock();
 
     const root = document.getElementById('view-study');
     const currentTask = task();
@@ -334,6 +367,22 @@
     requestAnimationFrame(compactStudy);
   }
 
+  document.addEventListener('change', event => {
+    const bibleSelect = event.target?.closest?.('#shell-version-select');
+    if (!bibleSelect || !hasProtectedSession()) return;
+    const active = activeVersionId();
+    if (!active || bibleSelect.value === active) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    bibleSelect.value = active;
+    syncVersionSwitchLock();
+    try {
+      if (typeof toast === 'function') toast('End the active session before changing Bible version.', 'error');
+    } catch (_) {}
+    returnToProtectedSession();
+  }, true);
+
   document.addEventListener('click', event => {
     const themeAction = event.target.closest?.('[data-action]')?.dataset.action;
     if (themeAction === 'toggle-appearance') {
@@ -386,7 +435,10 @@
   }, true);
 
   const studyRoot = document.getElementById('view-study');
-  if (studyRoot) new MutationObserver(scheduleCompact).observe(studyRoot, { childList: true, subtree: true });
+  if (studyRoot) new MutationObserver(() => {
+    scheduleCompact();
+    syncVersionSwitchLock();
+  }).observe(studyRoot, { childList: true, subtree: true });
 
   const settingsRoot = document.getElementById('view-settings');
   if (settingsRoot) new MutationObserver(scheduleSettingsPatch).observe(settingsRoot, { childList: true, subtree: true });
