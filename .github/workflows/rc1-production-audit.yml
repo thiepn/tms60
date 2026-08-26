@@ -10,6 +10,8 @@ on:
       - 'enhancements.js'
       - 'enhancements-legacy.js'
       - 'enhancements-core.js'
+      - 'language-switch-hardening.js'
+      - 'ux-patch.js'
       - 'rc3-hardening.js'
       - 'guided-learning-chain.js'
       - 'qol-fast-recall.js'
