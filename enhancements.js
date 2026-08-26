@@ -1,10 +1,11 @@
 'use strict';
 (() => {
   const current=document.currentScript;
-  const BUILD='20260826-stability15';
+  const BUILD='20260826-stability17';
   const assetUrl=name=>{const u=new URL(name,current?.src||location.href);u.searchParams.set('v',BUILD);return u.href};
   const topLevel=window.top===window;
   const UI_LANGUAGE_KEY='tms60-ui-language-v1';
+  const retriedFallbackVersions=new Set();
 
   function installIframeLocalizationGuard(){
     if(topLevel||window.__TMS60_IFRAME_LOCALIZATION_GUARD__)return;
@@ -43,6 +44,56 @@
       }
       return nativeAdd(type,listener,options);
     };
+  }
+
+  function isRetryableTranslationLoad(id,error){
+    const def=window.TMSVersions?.get?.(id);
+    if(!def||def.source!=='proxy')return false;
+    const message=String(error?.message||error||'');
+    if(/did not finish loading/i.test(message))return false;
+    if(/invalid TMS dataset|incomplete TMS dataset|missing one or more TMS passages|not available|no server-side source|service URL is invalid|must use HTTPS/i.test(message))return false;
+    return true;
+  }
+
+  function installVersionLoadRetry(attempt=0){
+    if(!topLevel||window.__TMS60_VERSION_LOAD_RETRY__)return;
+    if(typeof window.loadVersion!=='function'){
+      if(attempt<120)setTimeout(()=>installVersionLoadRetry(attempt+1),25);
+      return;
+    }
+    const nativeLoad=window.loadVersion;
+    window.__TMS60_VERSION_LOAD_RETRY__='1.0.0';
+    window.loadVersion=async function(id){
+      let lastError;
+      for(let pass=0;pass<3;pass++){
+        try{return await nativeLoad.call(this,id)}catch(error){
+          lastError=error;
+          if(pass>=2||!isRetryableTranslationLoad(id,error))throw error;
+          await new Promise(resolve=>setTimeout(resolve,pass===0?450:1200));
+        }
+      }
+      throw lastError;
+    };
+  }
+
+  function recoverInitialProxyFallback(){
+    if(!topLevel)return;
+    const notice=document.getElementById('notice');
+    if(!notice)return;
+    const inspect=()=>{
+      const text=String(notice.textContent||'');
+      if(!/Could not load .*falling back to ESV/i.test(text))return;
+      const def=window.TMSVersions?.list?.().find(item=>text.includes(item.name)&&item.source==='proxy');
+      if(!def||retriedFallbackVersions.has(def.id))return;
+      retriedFallbackVersions.add(def.id);
+      setTimeout(async()=>{
+        try{
+          if(typeof window.activateVersion==='function')await window.activateVersion(def.id);
+        }catch(_){ }
+      },1000);
+    };
+    new MutationObserver(inspect).observe(notice,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
+    inspect();
   }
 
   function injectScript(doc,name,flag,errorMessage){
@@ -101,6 +152,8 @@
   }
 
   if(topLevel){
+    installVersionLoadRetry();
+    recoverInitialProxyFallback();
     const bindFrame=()=>{
       const frame=document.getElementById('app-frame');
       if(!frame)return;
