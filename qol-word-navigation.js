@@ -1,9 +1,10 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_WORD_NAV_QOL__) return;
-  window.__TMS60_WORD_NAV_QOL__ = '1.6.0';
+  window.__TMS60_WORD_NAV_QOL__ = '1.7.0';
 
   const EMPTY_GUARD_KEY = 'tms60-qol-empty-advance-guard-v1';
+  const MOBILE_MODE = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
 
   const style = document.createElement('style');
   style.id = 'tms60-word-nav-qol-style';
@@ -40,24 +41,21 @@
     return cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0;
   };
 
-  const isMobileInputMode = () => {
-    const coarse = matchMedia('(pointer: coarse)').matches;
-    const mobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
-    return coarse || mobileUA;
-  };
-
-  const clozeInputs = () => [...document.querySelectorAll('.cloze-input:not(:disabled)')].filter(isVisibleEnabled);
+  const isMobileInputMode = () => MOBILE_MODE;
+  const studyRoot = () => document.getElementById('view-study');
+  const clozeInputs = () => [...(studyRoot()?.querySelectorAll('.cloze-input:not(:disabled)') || [])].filter(isVisibleEnabled);
 
   const syncClozeKeyboardHints = () => {
     const inputs = clozeInputs();
     inputs.forEach((input,index) => {
-      input.setAttribute('enterkeyhint', index === inputs.length - 1 ? 'done' : 'next');
-      input.setAttribute('inputmode','text');
+      const hint = index === inputs.length - 1 ? 'done' : 'next';
+      if (input.getAttribute('enterkeyhint') !== hint) input.setAttribute('enterkeyhint', hint);
+      if (input.getAttribute('inputmode') !== 'text') input.setAttribute('inputmode','text');
     });
   };
 
   const nextFocusableAfter = input => {
-    const scope = input.closest('.study-card') || document.querySelector('#view-study') || document;
+    const scope = input.closest('.study-card') || studyRoot() || document;
     const focusables = [...scope.querySelectorAll(
       'input:not(:disabled),button:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex]:not([tabindex="-1"])'
     )].filter(isVisibleEnabled);
@@ -68,7 +66,8 @@
 
   const focusTarget = (el, isAction = false) => {
     if (!el) return false;
-    document.querySelectorAll('.qol-word-target,.qol-next-target').forEach(node => {
+    const root = studyRoot() || document;
+    root.querySelectorAll('.qol-word-target,.qol-next-target').forEach(node => {
       if (node !== el) node.classList.remove('qol-word-target','qol-next-target');
     });
     el.classList.add(isAction ? 'qol-next-target' : 'qol-word-target');
@@ -98,8 +97,6 @@
       return true;
     }
 
-    // Always move exactly one position forward. A filled next box is still a
-    // valid navigation target; content must never cause Space/Tab to skip it.
     if (index < inputs.length - 1) {
       focusTarget(inputs[index + 1], false);
       return true;
@@ -119,9 +116,6 @@
     const index = inputs.indexOf(input);
     if (index < 0) return;
 
-    // Backspace is the cloze "previous box" control. It must work regardless
-    // of whether the current box already contains text. Selecting the previous
-    // box makes correction/replacement immediate without deleting this answer.
     if (event.key === 'Backspace' && index > 0) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -140,8 +134,6 @@
     advanceFromInput(input);
   }, true);
 
-  // Android/iOS IMEs do not consistently emit a useful Space keydown. Catch
-  // the actual text-insertion intent before the space enters a one-word blank.
   document.addEventListener('beforeinput', event => {
     if (event.defaultPrevented || event.isComposing || !isMobileInputMode()) return;
     const input = event.target?.closest?.('.cloze-input:not(:disabled)');
@@ -197,7 +189,17 @@
     }
   }, true);
 
-  const observer = new MutationObserver(syncClozeKeyboardHints);
-  observer.observe(document.body,{childList:true,subtree:true});
+  let syncScheduled = false;
+  const scheduleSync = () => {
+    if (syncScheduled) return;
+    syncScheduled = true;
+    requestAnimationFrame(() => {
+      syncScheduled = false;
+      syncClozeKeyboardHints();
+    });
+  };
+
+  const root = studyRoot();
+  if (root) new MutationObserver(scheduleSync).observe(root,{childList:true,subtree:true});
   syncClozeKeyboardHints();
 })();
