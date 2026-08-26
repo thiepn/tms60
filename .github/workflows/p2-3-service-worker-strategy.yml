@@ -1,0 +1,33 @@
+name: P2-3 Service Worker Strategy
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sw.js'
+      - 'index.html'
+      - 'app.html'
+      - 'translations.js'
+      - 'tests/p2-3-service-worker-strategy.mjs'
+      - 'tests/wait-for-pages-deployment.mjs'
+      - '.github/workflows/p2-3-service-worker-strategy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  service-worker-strategy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Wait for exact GitHub Pages deployment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tests/wait-for-pages-deployment.mjs
+      - run: node tests/p2-3-service-worker-strategy.mjs
