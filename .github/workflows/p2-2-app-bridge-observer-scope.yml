@@ -8,6 +8,7 @@ on:
       - 'enhancements.js'
       - 'enhancements-core.js'
       - 'language-switch-hardening.js'
+      - 'sw.js'
       - 'tests/p2-2-app-bridge-observer-scope.mjs'
       - 'tests/wait-for-pages-deployment.mjs'
       - '.github/workflows/p2-2-app-bridge-observer-scope.yml'
