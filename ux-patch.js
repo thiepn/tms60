@@ -1,16 +1,15 @@
 (() => {
   'use strict';
 
-  const originalRenderStudy = renderStudy;
-  const originalCompleteCurrent = completeCurrent;
-  const originalAdvanceFlashcardReview = advanceFlashcardReview;
+  let lastTaskId = null;
+  let compactScheduled = false;
 
-  function activeSessionTask() {
-    try { return currentTask(); } catch (_) { return null; }
+  function task() {
+    try { return typeof currentTask === 'function' ? currentTask() : null; } catch (_) { return null; }
   }
 
-  function activeSessionVerse() {
-    try { return currentVerse(); } catch (_) { return null; }
+  function verse() {
+    try { return typeof currentVerse === 'function' ? currentVerse() : null; } catch (_) { return null; }
   }
 
   function scrollSessionTop() {
@@ -21,7 +20,7 @@
     });
   }
 
-  function addPatchStyles() {
+  function addStyles() {
     if (document.getElementById('tms60-session-ux-patch')) return;
     const style = document.createElement('style');
     style.id = 'tms60-session-ux-patch';
@@ -38,62 +37,75 @@
     document.head.appendChild(style);
   }
 
-  function hideBuildOpeningPhrase(root, task, verse) {
-    if (task?.mode !== 'build' || !verse) return;
-    const phrases = phraseSplit(verse.text);
+  function patchBuild(root, currentTask, currentVerse) {
+    if (currentTask?.mode !== 'build' || !currentVerse || typeof phraseSplit !== 'function') return;
+    const phrases = phraseSplit(currentVerse.text);
     if (!phrases.length) return;
 
-    if (!Number.isFinite(session.exercise.phraseIndex)) session.exercise.phraseIndex = 0;
-    const shown = Math.max(0, Math.min(phrases.length, Number(session.exercise.phraseIndex) || 0));
+    if (typeof session === 'object' && session?.exercise && !Number.isFinite(session.exercise.phraseIndex)) {
+      session.exercise.phraseIndex = 0;
+    }
+    const shown = Math.max(0, Math.min(phrases.length, Number(session?.exercise?.phraseIndex) || 0));
 
     if (shown === 0) {
       root.querySelectorAll('.phrase').forEach(el => {
         el.classList.add('hidden-phrase');
-        el.textContent = 'Hidden phrase';
+        if (el.textContent !== 'Hidden phrase') el.textContent = 'Hidden phrase';
       });
       const reveal = root.querySelector('[data-action="next-phrase"]');
-      if (reveal) reveal.textContent = 'Reveal first phrase';
+      if (reveal && reveal.textContent !== 'Reveal first phrase') reveal.textContent = 'Reveal first phrase';
     }
 
     if (shown >= phrases.length) {
       root.querySelector('.rating-row')?.remove();
-      const actionHost = root.querySelector('.phrase-list')?.nextElementSibling;
-      if (actionHost && !root.querySelector('[data-patch-action="continue-build"]')) {
-        actionHost.innerHTML = '<button class="btn primary" type="button" data-patch-action="continue-build">Continue</button>';
+      const actions = root.querySelector('.phrase-list')?.nextElementSibling;
+      if (actions && !root.querySelector('[data-patch-action="continue-build"]')) {
+        actions.innerHTML = '<button class="btn primary" type="button" data-patch-action="continue-build">Continue</button>';
+        requestAnimationFrame(() => root.querySelector('[data-patch-action="continue-build"]')?.focus({ preventScroll: true }));
       }
-      setTimeout(() => root.querySelector('[data-patch-action="continue-build"]')?.focus({ preventScroll: true }), 0);
     }
   }
 
-  function compactActiveStudy() {
-    addPatchStyles();
-    const root = document.getElementById('view-study');
-    const task = activeSessionTask();
-    const verse = activeSessionVerse();
-    if (!root || !task || !verse || !session?.tasks?.length || session.index >= session.tasks.length) return;
+  function compactStudy() {
+    compactScheduled = false;
+    addStyles();
 
-    // Remove the redundant multi-line session chrome. The lightweight QoL
-    // session strip supplies the one safe line that remains.
+    const root = document.getElementById('view-study');
+    const currentTask = task();
+    const currentVerse = verse();
+    const active = Boolean(root && currentTask && currentVerse && typeof session === 'object' && session?.tasks?.length && session.index < session.tasks.length);
+
+    if (!active) {
+      lastTaskId = null;
+      return;
+    }
+
+    const currentTaskId = String(currentTask.id ?? `${session.index}:${currentTask.mode}:${currentVerse.id}`);
+    if (lastTaskId !== currentTaskId) {
+      lastTaskId = currentTaskId;
+      scrollSessionTop();
+    }
+
+    // The exercise itself is the focus. Remove duplicated session chrome and
+    // every prompt-level reference that can leak a reference-recall answer.
     root.querySelector('.page-head')?.remove();
     root.querySelector('.study-toolbar')?.remove();
     root.querySelector('.study-meta')?.remove();
     root.querySelectorAll('.prompt-ref').forEach(el => el.remove());
     root.querySelectorAll('.prompt').forEach(el => el.classList.add('prompt-compact'));
 
-    // Do not leak the reference answer anywhere during reference recall.
-    if (task.mode === 'reference') {
+    if (currentTask.mode === 'reference') {
       root.querySelectorAll('.queue-item').forEach(item => {
         const label = item.querySelectorAll('span')[1];
-        if (label && label.textContent.trim() === verse.reference) label.textContent = 'Current verse';
+        if (label && label.textContent.trim() === currentVerse.reference) label.textContent = 'Current verse';
       });
     }
 
     const referenceInput = root.querySelector('#reference-answer');
-    if (referenceInput) referenceInput.removeAttribute('placeholder');
+    if (referenceInput?.hasAttribute('placeholder')) referenceInput.removeAttribute('placeholder');
 
-    hideBuildOpeningPhrase(root, task, verse);
+    patchBuild(root, currentTask, currentVerse);
 
-    // Keep session exit available without occupying the top of the exercise.
     const footer = root.querySelector('.study-footer');
     if (footer && !footer.querySelector('[data-patch-end-session]')) {
       const end = document.createElement('button');
@@ -106,70 +118,57 @@
     }
   }
 
-  renderStudy = function (...args) {
-    const result = originalRenderStudy.apply(this, args);
-    compactActiveStudy();
-    return result;
-  };
+  function scheduleCompact() {
+    if (compactScheduled) return;
+    compactScheduled = true;
+    requestAnimationFrame(compactStudy);
+  }
 
-  completeCurrent = function (...args) {
-    const before = session?.index;
-    const result = originalCompleteCurrent.apply(this, args);
-    if (session?.index !== before || session?.summary) scrollSessionTop();
-    return result;
-  };
-
-  advanceFlashcardReview = function (...args) {
-    const before = session?.index;
-    const result = originalAdvanceFlashcardReview.apply(this, args);
-    if (session?.index !== before || session?.summary) scrollSessionTop();
-    return result;
-  };
-
-  // Build mode now begins with every phrase hidden. Reveal exactly one phrase
-  // per click/Space and continue without forcing a rating after acquisition.
   document.addEventListener('click', event => {
     const buildNext = event.target.closest?.('[data-action="next-phrase"]');
-    if (buildNext && activeSessionTask()?.mode === 'build') {
+    if (buildNext && task()?.mode === 'build') {
       event.preventDefault();
       event.stopImmediatePropagation();
-      const verse = activeSessionVerse();
-      const phrases = verse ? phraseSplit(verse.text) : [];
-      const current = Number.isFinite(session.exercise.phraseIndex) ? session.exercise.phraseIndex : 0;
+      const currentVerse = verse();
+      const phrases = currentVerse && typeof phraseSplit === 'function' ? phraseSplit(currentVerse.text) : [];
+      const current = Number.isFinite(session?.exercise?.phraseIndex) ? session.exercise.phraseIndex : 0;
       if (current < phrases.length) {
         session.exercise.phraseIndex = current + 1;
-        renderStudy();
+        if (typeof renderStudy === 'function') renderStudy();
       }
       return;
     }
 
     const continueBuild = event.target.closest?.('[data-patch-action="continue-build"]');
-    if (continueBuild && activeSessionTask()?.mode === 'build') {
+    if (continueBuild && task()?.mode === 'build') {
       event.preventDefault();
       event.stopImmediatePropagation();
-      completeCurrent(2, 100, null, { assisted: true });
+      if (typeof completeCurrent === 'function') completeCurrent(2, 100, null, { assisted: true });
     }
   }, true);
 
   document.addEventListener('keydown', event => {
-    const task = activeSessionTask();
-    if (!task || !document.getElementById('view-study')?.classList.contains('active')) return;
+    if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
+    const currentTask = task();
+    if (!currentTask || currentTask.mode !== 'build') return;
+    if (event.code !== 'Space' && event.key !== ' ') return;
     const active = document.activeElement;
+    if (['INPUT','TEXTAREA','SELECT'].includes(active?.tagName)) return;
 
-    if ((event.code === 'Space' || event.key === ' ') && task.mode === 'build' && !['INPUT','TEXTAREA','SELECT'].includes(active?.tagName)) {
-      const verse = activeSessionVerse();
-      const phrases = verse ? phraseSplit(verse.text) : [];
-      const current = Number.isFinite(session.exercise.phraseIndex) ? session.exercise.phraseIndex : 0;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      if (current < phrases.length) {
-        session.exercise.phraseIndex = current + 1;
-        renderStudy();
-      } else {
-        document.querySelector('[data-patch-action="continue-build"]')?.focus({ preventScroll: true });
-      }
+    const currentVerse = verse();
+    const phrases = currentVerse && typeof phraseSplit === 'function' ? phraseSplit(currentVerse.text) : [];
+    const current = Number.isFinite(session?.exercise?.phraseIndex) ? session.exercise.phraseIndex : 0;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (current < phrases.length) {
+      session.exercise.phraseIndex = current + 1;
+      if (typeof renderStudy === 'function') renderStudy();
+    } else {
+      document.querySelector('[data-patch-action="continue-build"]')?.focus({ preventScroll: true });
     }
   }, true);
 
-  renderStudy();
+  const root = document.getElementById('view-study');
+  if (root) new MutationObserver(scheduleCompact).observe(root, { childList: true, subtree: true });
+  scheduleCompact();
 })();
