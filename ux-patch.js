@@ -446,3 +446,88 @@
   scheduleCompact();
   scheduleSettingsPatch();
 })();
+
+/* P1-3: destructive resets must never execute while recall state is live. */
+(() => {
+  'use strict';
+
+  const RESET_ACTIONS = new Set([
+    'confirm-reset-progress',
+    'confirm-reset-all',
+    'reset-progress',
+    'reset-all'
+  ]);
+  let resetLockScheduled = false;
+
+  function activeSession() {
+    try { return typeof hasActiveSession === 'function' && Boolean(hasActiveSession()); }
+    catch (_) { return false; }
+  }
+
+  function returnToStudy() {
+    try {
+      if (typeof switchView === 'function') switchView('study');
+      else document.querySelector('[data-view="study"]')?.click();
+    } catch (_) {}
+  }
+
+  function syncResetLock() {
+    resetLockScheduled = false;
+    const locked = activeSession();
+    const settings = document.getElementById('view-settings');
+    if (!settings) return;
+
+    for (const action of ['confirm-reset-progress', 'confirm-reset-all']) {
+      const button = settings.querySelector(`[data-action="${action}"]`);
+      if (!button) continue;
+      button.disabled = locked;
+      button.dataset.sessionLocked = locked ? '1' : '0';
+      button.setAttribute('aria-disabled', locked ? 'true' : 'false');
+    }
+
+    const danger = settings.querySelector('.danger-zone');
+    if (!danger) return;
+    let note = danger.querySelector('[data-session-reset-lock]');
+    if (locked) {
+      if (!note) {
+        note = document.createElement('p');
+        note.className = 'tiny muted';
+        note.dataset.sessionResetLock = '1';
+        note.setAttribute('role', 'status');
+        danger.appendChild(note);
+      }
+      note.textContent = 'End the active study session before resetting stored progress.';
+    } else {
+      note?.remove();
+    }
+  }
+
+  function scheduleResetLock() {
+    if (resetLockScheduled) return;
+    resetLockScheduled = true;
+    requestAnimationFrame(syncResetLock);
+  }
+
+  /* Defense in depth. app.html also has a general protected-session capture guard;
+     this dedicated guard keeps P1-3 protected if that broader guard changes later. */
+  document.addEventListener('click', event => {
+    const action = event.target?.closest?.('[data-action]')?.dataset.action;
+    if (!RESET_ACTIONS.has(action) || !activeSession()) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    try {
+      if (typeof closeModal === 'function' && document.querySelector('.modal')) closeModal(false);
+      if (typeof toast === 'function') toast('End the active session before resetting stored progress.', 'error');
+    } catch (_) {}
+    returnToStudy();
+    scheduleResetLock();
+  }, true);
+
+  const settingsRoot = document.getElementById('view-settings');
+  if (settingsRoot) new MutationObserver(scheduleResetLock).observe(settingsRoot, { childList: true, subtree: true });
+  const studyRoot = document.getElementById('view-study');
+  if (studyRoot) new MutationObserver(scheduleResetLock).observe(studyRoot, { childList: true, subtree: true });
+
+  window.__TMS60_P13_RESET_GUARD__ = '1.0.0';
+  scheduleResetLock();
+})();
