@@ -206,7 +206,10 @@ finish.addEventListener('click',async()=>{
   try{await loadVersion(preferredVersion)}catch(error){
     console.error(error);
     showNotice(`Could not load ${getVersion(preferredVersion).name}; using ESV temporarily. Your saved Bible version will be retried automatically.`,'error',8000);
-    try{await loadVersion('esv',{persist:false})}catch(fallback){boot.textContent='TMS 60 could not be loaded.';console.error(fallback);return}
+    try{
+      await loadVersion('esv',{persist:false});
+      saveActiveVersion(preferredVersion);
+    }catch(fallback){boot.textContent='TMS 60 could not be loaded.';console.error(fallback);return}
   }
   if(!onboardingSeen())openOnboarding();
 })();
