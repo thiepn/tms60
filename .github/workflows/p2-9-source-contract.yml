@@ -1,0 +1,33 @@
+name: P2-9 Source Contract
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app.html'
+      - 'translations.js'
+      - 'p2-5-source-prep.js'
+      - 'sw.js'
+      - 'tests/p2-9-source-contract.mjs'
+      - 'tests/wait-for-pages-deployment.mjs'
+      - '.github/workflows/p2-9-source-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Wait for exact GitHub Pages deployment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tests/wait-for-pages-deployment.mjs
+      - run: node tests/p2-9-source-contract.mjs
