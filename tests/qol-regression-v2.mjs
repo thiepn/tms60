@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 
-const APP='https://thiepn.github.io/tms60/';
+const APP=process.env.TMS60_APP||'https://thiepn.github.io/tms60/';
 const out={passes:[],failures:[]};
 const test=(condition,name,detail='')=>{
   (condition?out.passes:out.failures).push({name,detail});
@@ -33,7 +33,7 @@ async function waitForQoL(page,timeout=150000){
         fast:window.__TMS60_FAST_RECALL_QOL__||'',
         cloze:window.__TMS60_CLOZE_HELPERS_QOL__||''
       }));
-      if(versions.word==='1.8.0'&&versions.fast&&versions.cloze)return frame;
+      if(versions.word==='1.9.0'&&versions.fast&&versions.cloze)return frame;
     }catch{}
     await page.waitForTimeout(4000);
     await page.reload({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{});
@@ -85,7 +85,7 @@ try{
     let inputs=frame.locator('.cloze-input:not(:disabled)');
     const count=await inputs.count();
     test(count>=3,'Cloze exposes enough blanks for navigation regression',String(count));
-    test(await frame.evaluate(()=>window.__TMS60_WORD_NAV_QOL__)==='1.8.0','Backspace hotfix layer is installed');
+    test(await frame.evaluate(()=>window.__TMS60_WORD_NAV_QOL__)==='1.9.0','Backspace hotfix layer is installed');
     test(await frame.locator('#qol-session-strip').isVisible(),'Persistent session progress strip visible');
     test(await frame.locator('#qol-cloze-counter').isVisible(),'Active blank counter visible');
 
@@ -106,16 +106,24 @@ try{
     test(await second.inputValue()==='bet','Backspace deletes current-block text normally',await second.inputValue());
     test(await second.evaluate(el=>document.activeElement===el),'Deleting text does not jump to the previous block');
 
-    // Once nothing remains to delete, Backspace travels backward. The previous
-    // field receives a caret at its end, so the next Backspace deletes there.
+    // Once nothing remains to delete, one Backspace travels backward and
+    // deletes from the previous block in the same keystroke.
     await second.fill('');
+    const firstBefore=await first.inputValue();
     await second.press('Backspace');
     test(await first.evaluate(el=>document.activeElement===el),'Backspace on empty blank travels backward');
-    const firstBefore=await first.inputValue();
-    await first.press('Backspace');
-    test(await first.inputValue()===firstBefore.slice(0,-1),'Backspace after backward travel deletes previous-block text',await first.inputValue());
-    test(await first.evaluate(el=>document.activeElement===el),'Deletion after backward travel stays in that block');
+    test(await first.inputValue()===firstBefore.slice(0,-1),'Boundary Backspace deletes previous-block text immediately',await first.inputValue());
+    test(await first.evaluate(el=>document.activeElement===el),'Boundary deletion stays in the previous block');
     await first.fill('alpha');
+
+    // Regression for the reported sequence: move forward, return to a filled
+    // block, and verify Backspace still edits instead of being captured.
+    await second.fill('beta');
+    await second.press('Tab');
+    await second.focus();
+    await second.evaluate(el=>el.setSelectionRange(el.value.length,el.value.length));
+    await second.press('Backspace');
+    test(await second.inputValue()==='bet','Backspace still deletes after leaving and returning to a block',await second.inputValue());
 
     await first.evaluate(el=>{
       const event=new Event('paste',{bubbles:true,cancelable:true});
@@ -210,8 +218,10 @@ try{
     test(await inputs.nth(1).inputValue()==='bet','Mobile Backspace preserves native deletion',await inputs.nth(1).inputValue());
 
     await inputs.nth(1).fill('');
+    const mobileFirstBefore=await inputs.nth(0).inputValue();
     await inputs.nth(1).press('Backspace');
     test(await inputs.nth(0).evaluate(el=>document.activeElement===el),'Mobile Backspace on empty blank travels backward');
+    test(await inputs.nth(0).inputValue()===mobileFirstBefore.slice(0,-1),'Mobile boundary Backspace deletes immediately',await inputs.nth(0).inputValue());
 
     await inputs.nth(0).fill('alpha');
     await inputs.nth(0).press('Space');

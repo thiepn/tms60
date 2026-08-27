@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_WORD_NAV_QOL__) return;
-  window.__TMS60_WORD_NAV_QOL__ = '1.8.0';
+  window.__TMS60_WORD_NAV_QOL__ = '1.9.0';
 
   const EMPTY_GUARD_KEY = 'tms60-qol-empty-advance-guard-v1';
   const MOBILE_MODE = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
@@ -107,11 +107,31 @@
     return start !== end || start > 0;
   };
 
-  const navigateBackwardIfAtStart = input => {
+  let lastBoundaryBackspace = null;
+
+  const dispatchEdited = input => {
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+  };
+
+  const deletePreviousCharacter = input => {
     const inputs = clozeInputs();
     const index = inputs.indexOf(input);
     if (index <= 0 || canNativeBackspaceDelete(input)) return false;
-    focusBackwardTarget(inputs[index - 1]);
+
+    // Cross the artificial word boundary exactly like Backspace crosses a
+    // normal character boundary: move only backward and delete in the same
+    // keystroke. Skip empty blocks so deletion never gets stuck between words.
+    let targetIndex = index - 1;
+    while (targetIndex > 0 && !String(inputs[targetIndex].value || '').length) targetIndex--;
+    const target = inputs[targetIndex];
+    focusBackwardTarget(target);
+    const value = String(target.value || '');
+    if (value.length) {
+      const end = value.length;
+      target.setRangeText('',end - 1,end,'end');
+      dispatchEdited(target);
+    }
     return true;
   };
 
@@ -157,9 +177,10 @@
       // current blank. Only travel backward when the caret is already at the
       // beginning (or the blank is empty), where native Backspace has nothing
       // left to delete in this block.
-      if (index > 0 && navigateBackwardIfAtStart(input)) {
+      if (index > 0 && deletePreviousCharacter(input)) {
         event.preventDefault();
         event.stopImmediatePropagation();
+        lastBoundaryBackspace = {input,at:performance.now()};
       }
       return;
     }
@@ -183,7 +204,8 @@
     // Some mobile keyboards report Backspace only as beforeinput. Preserve the
     // same rule: native deletion wins whenever the current blank can delete.
     if (event.inputType === 'deleteContentBackward') {
-      if (navigateBackwardIfAtStart(input)) {
+      const duplicate = lastBoundaryBackspace?.input === input && performance.now() - lastBoundaryBackspace.at < 120;
+      if (duplicate || deletePreviousCharacter(input)) {
         event.preventDefault();
         event.stopImmediatePropagation();
       }

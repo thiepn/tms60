@@ -40,7 +40,7 @@ It guides each verse through a structured progression:
 |---|---|---|
 | Exact typing | Spaced repetition | Fully offline |
 | Missing words | Wording + reference mastery | Desktop and mobile |
-| First letters | Same-session relearning | Keyboard and touch support |
+| First letters | Fixed-size study sessions | Keyboard and touch support |
 | Flashcards | Weak-word diagnostics | Light/dark mode |
 | Reference recall | Pack assessments | 8 accent colors |
 | Phrase build-up | Placement testing | Import/export backups |

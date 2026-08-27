@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 
-const APP='https://thiepn.github.io/tms60/';
+const APP=process.env.TMS60_APP||'https://thiepn.github.io/tms60/';
 const out={passes:[],failures:[]};
 function test(ok,name,detail=''){
   (ok?out.passes:out.failures).push({name,detail});
@@ -33,7 +33,7 @@ async function waitForFix(page,timeout=150000){
         guided:window.__TMS60_GUIDED_CHAIN_FIX__||'',
         stable:window.__TMS60_SESSION_PLAN_STABILITY__||''
       }));
-      if(markers.guided==='2.0.0'&&markers.stable==='1.0.0')return f;
+      if(markers.guided==='3.0.0'&&markers.stable==='2.0.0')return f;
     }catch{}
     await page.waitForTimeout(4000);
     await page.reload({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{});
@@ -130,6 +130,22 @@ try{
   test(failurePlan.index===1&&failurePlan.summary?.count===1,'Failed one-task session still finishes with denominator one',JSON.stringify(failurePlan));
   test(failurePlan.stageAfter===failurePlan.stageBefore,'Failed learning step does not falsely advance its stage',`${failurePlan.stageBefore} -> ${failurePlan.stageAfter}`);
   test(failurePlan.events===1&&failurePlan.lastScore===0,'Failed attempt is still recorded for future scheduling',JSON.stringify(failurePlan));
+
+  const singlePlan=await frame.evaluate(async()=>{
+    for(const v of VERSES) state.progress[v.id]=defaultProgress();
+    state.events=[];
+    session=emptySession();
+    completionLocked=false;
+    startVerseLearning(1);
+    const initial=session.tasks.length;
+    completeCurrent(3,100,{exact:true,score:100,wrong:[],missing:[],extra:[],ops:[],testedOps:[]});
+    await new Promise(r=>setTimeout(r,280));
+    return {initial,final:session.tasks.length,index:session.index,summary:session.summary,stage:state.progress[1].stage};
+  });
+
+  test(singlePlan.initial===1&&singlePlan.final===1,'Single-verse session also keeps its announced size',JSON.stringify(singlePlan));
+  test(singlePlan.index===1&&singlePlan.summary?.count===1,'Single-verse session finishes instead of silently appending another stage',JSON.stringify(singlePlan));
+  test(singlePlan.stage===1,'Single-verse completion still advances learning progress',String(singlePlan.stage));
   test(await frame.evaluate(()=>typeof window.__TMS60_NATIVE_INSERT_TASK__==='function'),'Original relearn helper retained only for diagnostics');
   test(errors.length===0,'Fixed-session regression has no runtime errors',errors.join(' | '));
   await context.close();

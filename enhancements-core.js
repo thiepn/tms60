@@ -191,13 +191,10 @@
     }
     startVerseLearning=startSmartLearn;
 
-    completeCurrent=function(...args){
-      const smart=session.type==='smart-learn',task=smart?currentTask():null,id=task?.verseId,before=smart&&id?state.progress[id].stage:null;
-      coreCompleteCurrent(...args);
-      if(smart&&id&&state.progress[id].stage>before&&state.progress[id].stage<6&&session.index>=session.tasks.length){
-        session.summary=null;session.tasks.push(smartLearningTask(id));session.currentStartedAt=now();session.exercise={};renderStudy();
-      }
-    };
+    // Completing a task may advance the verse's learning stage, but it must not
+    // append the next stage to the active session. The completion screen already
+    // provides an explicit Continue action for users who want another step.
+    completeCurrent=function(...args){return coreCompleteCurrent(...args)};
 
     renderHome=function(){
       const m=metrics(),q=buildGuidedQueue(),next=nextLearningVerse(),dueCount=m.dueW+m.dueR,memorized=m.established,pct=Math.round(100*memorized/60);
