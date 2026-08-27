@@ -29,12 +29,16 @@ async function waitForFix(page,timeout=150000){
   while(Date.now()<end){
     try{
       const f=await frameOf(page,30000);
-      if(await f.evaluate(()=>window.__TMS60_GUIDED_CHAIN_FIX__==='1.0.0'))return f;
+      const markers=await f.evaluate(()=>({
+        guided:window.__TMS60_GUIDED_CHAIN_FIX__||'',
+        stable:window.__TMS60_SESSION_PLAN_STABILITY__||''
+      }));
+      if(markers.guided==='2.0.0'&&markers.stable==='1.0.0')return f;
     }catch{}
     await page.waitForTimeout(4000);
     await page.reload({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{});
   }
-  throw new Error('guided due fix not deployed in time');
+  throw new Error('fixed-session hotfix did not reach the target in time');
 }
 
 const browser=await chromium.launch({headless:true});
@@ -48,54 +52,89 @@ try{
   const frame=await waitForFix(page);
   errors.length=0;
 
-  const result=await frame.evaluate(async()=>{
-    state.settings.dailyGoal=1;
-    state.settings.activePerSession=1;
+  const fixedPlan=await frame.evaluate(async()=>{
+    state.settings.dailyGoal=5;
+    state.settings.activePerSession=4;
     state.settings.newPerDay=1;
     for(const v of VERSES) state.progress[v.id]=defaultProgress();
+    // Four active learning verses + one unseen verse = exactly five tasks.
+    for(let id=1;id<=4;id++){
+      state.progress[id].stage=1;
+      state.progress[id].lastReviewed=id;
+    }
     state.events=[];
     session=emptySession();
     completionLocked=false;
 
     startSession('guided',{force:true});
-    const verseId=currentTask()?.verseId;
-    const stages=[];
+    const initial=session.tasks.length;
+    const lengths=[initial];
+    const stagesBefore=[];
+    const stagesAfter=[];
     let guard=0;
-    while(verseId && state.progress[verseId].stage<6 && guard++<12){
-      const t=currentTask();
-      if(!t)break;
-      stages.push({stage:state.progress[verseId].stage,mode:t.mode,source:t.source,tasks:session.tasks.length,index:session.index});
+    while(currentTask()&&guard++<10){
+      const task=currentTask();
+      const verseId=task.verseId;
+      stagesBefore.push({verseId,stage:state.progress[verseId].stage,mode:task.mode});
       completeCurrent(3,100,{exact:true,score:100,wrong:[],missing:[],extra:[],ops:[],testedOps:[]});
       await new Promise(r=>setTimeout(r,260));
+      stagesAfter.push({verseId,stage:state.progress[verseId].stage});
+      lengths.push(session.tasks.length);
     }
-    const p=state.progress[verseId];
     return {
-      verseId,
-      stages,
-      finalStage:p?.stage,
-      wordingPhase:p?.wording?.phase,
-      wordingDue:p?.wording?.due,
-      wordingInterval:p?.wording?.interval,
-      referencePhase:p?.reference?.phase,
-      referenceDue:p?.reference?.due,
-      now:Date.now(),
+      initial,
+      lengths,
+      stagesBefore,
+      stagesAfter,
+      index:session.index,
       summary:session.summary,
-      taskCount:session.tasks.length,
-      index:session.index
+      events:state.events.length
     };
   });
 
-  test(result.verseId===1,'Guided session begins with first unseen verse',String(result.verseId));
-  test(result.stages.length>=5,'Guided session chains multiple learning stages',JSON.stringify(result.stages));
-  test(result.finalStage===6,'Guided session graduates card into maintenance',`stage=${result.finalStage}`);
-  test(result.wordingPhase!=='new','Graduated wording has a scheduled review phase',String(result.wordingPhase));
-  test(Number(result.wordingDue)>Number(result.now),'Graduated wording receives a future due date',`${result.wordingDue-result.now}ms`);
-  test(Number(result.wordingInterval)>0,'Graduated wording receives a non-zero interval',String(result.wordingInterval));
-  test(result.referencePhase!=='new','Reference review is initialized when wording graduates',String(result.referencePhase));
-  test(errors.length===0,'No runtime errors during guided graduation',errors.join(' | '));
+  test(fixedPlan.initial===5,'Guided session begins with exactly five planned tasks',String(fixedPlan.initial));
+  test(fixedPlan.lengths.every(n=>n===5),'Session task total never increases while completing work',fixedPlan.lengths.join(' -> '));
+  test(fixedPlan.index===5,'Five-task session ends after exactly five completions',String(fixedPlan.index));
+  test(fixedPlan.summary?.count===5,'Session summary keeps the original task count',JSON.stringify(fixedPlan.summary));
+  test(fixedPlan.events===5,'All five completions are still recorded',String(fixedPlan.events));
+  test(fixedPlan.stagesAfter.every((row,i)=>row.stage===fixedPlan.stagesBefore[i].stage+1),'Guided learning still advances each verse by one stage',JSON.stringify({before:fixedPlan.stagesBefore,after:fixedPlan.stagesAfter}));
+
+  const failurePlan=await frame.evaluate(async()=>{
+    for(const v of VERSES) state.progress[v.id]=defaultProgress();
+    state.progress[1].stage=1;
+    state.settings.activePerSession=1;
+    state.settings.newPerDay=0;
+    state.events=[];
+    session=emptySession();
+    completionLocked=false;
+
+    startSession('guided',{force:true});
+    const initial=session.tasks.length;
+    const stageBefore=state.progress[1].stage;
+    completeCurrent(0,0,{exact:false,score:0,wrong:['x'],missing:[],extra:[],ops:[],testedOps:[]});
+    await new Promise(r=>setTimeout(r,280));
+    return {
+      initial,
+      final:session.tasks.length,
+      index:session.index,
+      summary:session.summary,
+      stageBefore,
+      stageAfter:state.progress[1].stage,
+      events:state.events.length,
+      lastScore:state.progress[1].lastScore
+    };
+  });
+
+  test(failurePlan.initial===1,'Failure regression begins with one planned task',String(failurePlan.initial));
+  test(failurePlan.final===1,'Failed task cannot append same-session relearns',`${failurePlan.initial} -> ${failurePlan.final}`);
+  test(failurePlan.index===1&&failurePlan.summary?.count===1,'Failed one-task session still finishes with denominator one',JSON.stringify(failurePlan));
+  test(failurePlan.stageAfter===failurePlan.stageBefore,'Failed learning step does not falsely advance its stage',`${failurePlan.stageBefore} -> ${failurePlan.stageAfter}`);
+  test(failurePlan.events===1&&failurePlan.lastScore===0,'Failed attempt is still recorded for future scheduling',JSON.stringify(failurePlan));
+  test(await frame.evaluate(()=>typeof window.__TMS60_NATIVE_INSERT_TASK__==='function'),'Original relearn helper retained only for diagnostics');
+  test(errors.length===0,'Fixed-session regression has no runtime errors',errors.join(' | '));
   await context.close();
 }catch(error){
-  test(false,'Guided due regression fatal',String(error?.stack||error));
+  test(false,'Fixed-session regression fatal',String(error?.stack||error));
 }finally{
   await browser.close();
 }

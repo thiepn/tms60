@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   if (window.top === window || window.__TMS60_WORD_NAV_QOL__) return;
-  window.__TMS60_WORD_NAV_QOL__ = '1.7.0';
+  window.__TMS60_WORD_NAV_QOL__ = '1.8.0';
 
   const EMPTY_GUARD_KEY = 'tms60-qol-empty-advance-guard-v1';
   const MOBILE_MODE = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
@@ -64,18 +64,54 @@
     return focusables.slice(index + 1).find(el => !el.classList.contains('cloze-input')) || null;
   };
 
-  const focusTarget = (el, isAction = false) => {
-    if (!el) return false;
+  const clearTargetClasses = keep => {
     const root = studyRoot() || document;
     root.querySelectorAll('.qol-word-target,.qol-next-target').forEach(node => {
-      if (node !== el) node.classList.remove('qol-word-target','qol-next-target');
+      if (node !== keep) node.classList.remove('qol-word-target','qol-next-target');
     });
+  };
+
+  const focusTarget = (el, isAction = false) => {
+    if (!el) return false;
+    clearTargetClasses(el);
     el.classList.add(isAction ? 'qol-next-target' : 'qol-word-target');
     el.focus({preventScroll:true});
     if (typeof el.select === 'function' && !isAction) {
       try { el.select(); } catch (_) {}
     }
     el.scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});
+    return true;
+  };
+
+  // Backward navigation is deliberately different from normal forward focus:
+  // place the caret at the end so the very next Backspace deletes text rather
+  // than selecting the whole previous blank or jumping again.
+  const focusBackwardTarget = el => {
+    if (!el) return false;
+    clearTargetClasses(el);
+    el.classList.add('qol-word-target');
+    el.focus({preventScroll:true});
+    try {
+      const end = String(el.value || '').length;
+      el.setSelectionRange(end,end);
+    } catch (_) {}
+    el.scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});
+    return true;
+  };
+
+  const canNativeBackspaceDelete = input => {
+    const value = String(input.value || '');
+    if (!value.length) return false;
+    const start = typeof input.selectionStart === 'number' ? input.selectionStart : value.length;
+    const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+    return start !== end || start > 0;
+  };
+
+  const navigateBackwardIfAtStart = input => {
+    const inputs = clozeInputs();
+    const index = inputs.indexOf(input);
+    if (index <= 0 || canNativeBackspaceDelete(input)) return false;
+    focusBackwardTarget(inputs[index - 1]);
     return true;
   };
 
@@ -116,10 +152,15 @@
     const index = inputs.indexOf(input);
     if (index < 0) return;
 
-    if (event.key === 'Backspace' && index > 0) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      focusTarget(inputs[index - 1], false);
+    if (event.key === 'Backspace') {
+      // Never steal a Backspace that can delete selected/text content in the
+      // current blank. Only travel backward when the caret is already at the
+      // beginning (or the blank is empty), where native Backspace has nothing
+      // left to delete in this block.
+      if (index > 0 && navigateBackwardIfAtStart(input)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
       return;
     }
 
@@ -138,6 +179,17 @@
     if (event.defaultPrevented || event.isComposing || !isMobileInputMode()) return;
     const input = event.target?.closest?.('.cloze-input:not(:disabled)');
     if (!input) return;
+
+    // Some mobile keyboards report Backspace only as beforeinput. Preserve the
+    // same rule: native deletion wins whenever the current blank can delete.
+    if (event.inputType === 'deleteContentBackward') {
+      if (navigateBackwardIfAtStart(input)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+      return;
+    }
+
     const data = String(event.data ?? '');
     if (event.inputType !== 'insertText' || !/^\s+$/u.test(data)) return;
 

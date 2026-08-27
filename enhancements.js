@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const current=document.currentScript;
-  const BUILD='20260826-stability20';
+  const BUILD='20260827-hotfix-controls1';
   const assetUrl=name=>{const u=new URL(name,current?.src||location.href);u.searchParams.set('v',BUILD);return u.href};
   const topLevel=window.top===window;
   const UI_LANGUAGE_KEY='tms60-ui-language-v1';
@@ -49,9 +49,6 @@
           let latestThis=null;
           const wrapped=function(event){
             if(event?.target?.closest?.('[data-view]'))return;
-            // English is already the source UI, so a whole-document localization
-            // pass after every tap is pure overhead. Language-change handlers
-            // still run normally and DE/KO keep their localization passes.
             if(currentUiLanguage()==='en')return;
             latestEvent=event;
             latestThis=this;
