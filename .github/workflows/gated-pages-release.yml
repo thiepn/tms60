@@ -71,6 +71,7 @@ jobs:
             tests/p2-6-theme-sync.mjs
             tests/p2-7-backup-identity.mjs
             tests/p2-8-localized-tts-reference.mjs
+            tests/p2-9-source-contract.mjs
             tests/rc1-bible-gate.mjs
           )
 
@@ -99,6 +100,7 @@ jobs:
             tests/p2-6-theme-sync.mjs
             tests/p2-7-backup-identity.mjs
             tests/p2-8-localized-tts-reference.mjs
+            tests/p2-9-source-contract.mjs
             tests/rc1-bible-gate.mjs
           )
 
