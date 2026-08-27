@@ -54,7 +54,9 @@ try{
 
   const fixedPlan=await frame.evaluate(async()=>{
     state.settings.dailyGoal=5;
-    state.settings.activePerSession=4;
+    // Keep the active-learning cap above the four seeded active verses so the
+    // scheduler is allowed to add the one unseen verse used by this fixture.
+    state.settings.activePerSession=5;
     state.settings.newPerDay=1;
     for(const v of VERSES) state.progress[v.id]=defaultProgress();
     // Four active learning verses + one unseen verse = exactly five tasks.
