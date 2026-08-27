@@ -105,7 +105,14 @@ const corpus=await frame.evaluate(()=>{
 });
 
 pass(corpus.refs.length===60,'P2-8 audit covers all 60 canonical references',`count=${corpus.refs.length}`);
-const germanFailures=corpus.german.filter(row=>!/, Kapitel \d+, Vers(?:e)? \d+/.test(row.text)||/^\d?\s*[A-Za-z]/.test(row.text));
+const germanSameNameAllowed=new Set(['Psalm','Titus']);
+const germanFailures=corpus.german.filter(row=>{
+  const grammar=/^(.+), Kapitel \d+, (?:Vers \d+|Verse \d+ bis \d+)\. X$/.exec(row.text);
+  if(!grammar||row.text.includes(':'))return true;
+  const canonicalBook=row.reference.replace(/\s+\d+:.*/, '');
+  const spokenBook=grammar[1];
+  return spokenBook===canonicalBook&&!germanSameNameAllowed.has(canonicalBook);
+});
 const koreanFailures=corpus.korean.filter(row=>!/[가-힣].*\d+장 \d+절/.test(row.text)||row.text.includes(':'));
 pass(germanFailures.length===0,'Every TMS reference has German spoken-reference localization',JSON.stringify(germanFailures));
 pass(koreanFailures.length===0,'Every TMS reference has Korean spoken-reference localization',JSON.stringify(koreanFailures));
