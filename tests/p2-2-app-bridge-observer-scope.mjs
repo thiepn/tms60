@@ -32,6 +32,15 @@ async function nav(frame,view){
   await frame.waitForFunction(v=>document.documentElement.dataset.view===v,view,{timeout:10000});
 }
 
+async function waitForCanonicalTranslationControls(frame){
+  await frame.waitForFunction(()=>{
+    const language=document.querySelectorAll('#ui-language-select');
+    const bible=document.querySelectorAll('#shell-version-select');
+    const card=document.querySelector('[data-shell-version-settings]');
+    return language.length===1&&bible.length===1&&Boolean(card?.contains(language[0])&&card?.contains(bible[0]))&&(bible[0]?.options.length||0)===7;
+  },null,{timeout:10000});
+}
+
 const browser=await chromium.launch({headless:true});
 try{
   const sourceResponse=await fetch(`${APP}index.html?bridge-scope-audit=${Date.now()}`,{cache:'no-store'});
@@ -60,21 +69,26 @@ try{
   await nav(frame,'settings');
   await frame.waitForSelector('[data-shell-version-settings] #shell-version-select',{timeout:10000});
   await frame.waitForSelector('[data-shell-version-settings] #ui-language-select',{timeout:10000});
+  // Both the localization layer and the canonical Settings patch can react to
+  // the same render. Sample only after the established self-heal has completed,
+  // rather than between those two mutation/animation-frame callbacks.
+  await waitForCanonicalTranslationControls(frame);
   let selectors=await frame.evaluate(()=>({
     language:document.querySelectorAll('#ui-language-select').length,
     bible:document.querySelectorAll('#shell-version-select').length,
     combined:Boolean(document.querySelector('[data-shell-version-settings] #ui-language-select')&&document.querySelector('[data-shell-version-settings] #shell-version-select')),
     versions:document.querySelector('#shell-version-select')?.options.length||0
   }));
-  check(selectors.language===1&&selectors.bible===1,'One language and one Bible selector after initial bridge attach',JSON.stringify(selectors));
+  check(selectors.language===1&&selectors.bible===1,'One language and one Bible selector after initial bridge self-heal',JSON.stringify(selectors));
   check(selectors.combined&&selectors.versions===7,'Combined Settings translation controls remain intact',JSON.stringify(selectors));
 
   // Settings rerenders must still recreate the shell-owned Bible card.
   for(let i=0;i<8;i++){
     await frame.evaluate(()=>{ if(typeof renderSettings==='function')renderSettings(); else throw new Error('renderSettings unavailable'); });
     await frame.waitForSelector('[data-shell-version-settings] #shell-version-select',{timeout:10000});
-    await frame.waitForTimeout(35);
+    await page.waitForTimeout(35);
   }
+  await waitForCanonicalTranslationControls(frame);
   selectors=await frame.evaluate(()=>({
     language:document.querySelectorAll('#ui-language-select').length,
     bible:document.querySelectorAll('#shell-version-select').length,
@@ -109,6 +123,7 @@ try{
   const beforeSettingsMutation=await page.evaluate(()=>({...window.__TMS60_APP_BRIDGE_STATS__}));
   await frame.evaluate(()=>document.querySelector('[data-shell-version-settings]')?.remove());
   await frame.waitForSelector('[data-shell-version-settings] #shell-version-select',{timeout:10000});
+  await waitForCanonicalTranslationControls(frame);
   await page.waitForTimeout(80);
   const afterSettingsMutation=await page.evaluate(()=>({...window.__TMS60_APP_BRIDGE_STATS__}));
   check(afterSettingsMutation.settingsMutationCallbacks>beforeSettingsMutation.settingsMutationCallbacks,'Settings mutation wakes scoped bridge observer',`${beforeSettingsMutation.settingsMutationCallbacks} -> ${afterSettingsMutation.settingsMutationCallbacks}`);
