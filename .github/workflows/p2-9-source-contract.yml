@@ -7,6 +7,8 @@ on:
       - 'translations.js'
       - 'p2-5-source-prep.js'
       - 'sw.js'
+      - 'tests/p2-7-backup-identity.mjs'
+      - 'tests/p2-8-localized-tts-reference.mjs'
       - 'tests/p2-9-source-contract.mjs'
       - 'tests/wait-for-pages-deployment.mjs'
       - '.github/workflows/p2-9-source-contract.yml'
