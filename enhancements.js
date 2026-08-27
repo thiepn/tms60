@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const current=document.currentScript;
-  const BUILD='20260827-hotfix-controls2';
+  const BUILD='20260827-p2-cleanup';
   const assetUrl=name=>{const u=new URL(name,current?.src||location.href);u.searchParams.set('v',BUILD);return u.href};
   const topLevel=window.top===window;
   const UI_LANGUAGE_KEY='tms60-ui-language-v1';

@@ -8,11 +8,14 @@ on:
       - 'qol-cloze-helpers.js'
       - 'guided-learning-chain.js'
       - 'enhancements.js'
+      - 'enhancements-core.js'
+      - 'app.html'
       - 'language-switch-hardening.js'
       - 'sw.js'
       - 'tests/qol-regression-v2.mjs'
       - 'tests/guided-due-regression.mjs'
       - 'tests/p2-1-study-observer-scope.mjs'
+      - 'tests/p2-ui-defaults-regression.mjs'
       - 'tests/wait-for-pages-deployment.mjs'
       - '.github/workflows/gated-pages-release.yml'
       - '.github/workflows/qol-regression.yml'
@@ -39,3 +42,4 @@ jobs:
       - run: node tests/qol-regression-v2.mjs
       - run: node tests/guided-due-regression.mjs
       - run: node tests/p2-1-study-observer-scope.mjs
+      - run: node tests/p2-ui-defaults-regression.mjs
