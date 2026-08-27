@@ -84,8 +84,9 @@ pass(await page.evaluate(()=>window.__TMS60_P27_BACKUP_IDENTITY_PREP__)==='1.0.0
 pass(await frame.evaluate(()=>window.__TMS60_P27_BACKUP_IDENTITY__)==='1.0.0','P2-7 runtime backup identity bridge loaded');
 
 const generatedSource=await page.evaluate(()=>document.getElementById('app-frame')?.srcdoc||'');
-pass(!generatedSource.includes("application:'TMS 60 ESV Memory Lab'"),'Generated app source no longer carries the legacy hard-coded ESV backup identity');
-pass(generatedSource.includes("application:'TMS 60 Memory Lab'"),'Generated app source uses a translation-neutral native fallback identity');
+const generatedApplication=generatedSource.match(/\bapplication\s*:\s*(["'])(.*?)\1/)?.[2]||'';
+pass(generatedApplication!=='TMS 60 ESV Memory Lab','Generated app source no longer carries the legacy hard-coded ESV backup identity',generatedApplication);
+pass(generatedApplication==='TMS 60 Memory Lab','Generated app source uses a translation-neutral native fallback identity',generatedApplication);
 
 let identity=await runtimeIdentity();
 pass(identity.runtime?.id==='hfa'&&identity.runtime?.name==='Hoffnung für Alle','Cold boot runtime identity is HFA',JSON.stringify(identity.runtime));
