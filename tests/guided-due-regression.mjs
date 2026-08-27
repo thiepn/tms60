@@ -53,9 +53,9 @@ try{
   errors.length=0;
 
   const fixedPlan=await frame.evaluate(async()=>{
-    state.settings.dailyGoal=5;
-    // Keep the active-learning cap above the four seeded active verses so the
+    // Keep both backlog thresholds above the four seeded active verses so the
     // scheduler is allowed to add the one unseen verse used by this fixture.
+    state.settings.dailyGoal=6;
     state.settings.activePerSession=5;
     state.settings.newPerDay=1;
     for(const v of VERSES) state.progress[v.id]=defaultProgress();
