@@ -37,6 +37,7 @@ const result=await frame.evaluate(()=>{
     customPreserved:sanitizeTargetDate('2032-04-05',reference),
     singular:formatMinutes(1),
     plural:formatMinutes(2),
+    ratingCaps:[74,75,89,90,99,100].map(score=>[score,maxRatingForScore(score)]),
     homeText:document.getElementById('view-home').innerText
   };
 });
@@ -47,6 +48,7 @@ pass(result.expiredLegacy===result.expectedKey,'Expired legacy default date migr
 pass(result.customPreserved==='2032-04-05','A valid custom target date remains unchanged',result.customPreserved);
 pass(result.singular==='1 minute','One-minute estimates use singular grammar',result.singular);
 pass(result.plural==='2 minutes','Multi-minute estimates use plural grammar',result.plural);
+pass(JSON.stringify(result.ratingCaps)===JSON.stringify([[74,0],[75,1],[89,1],[90,2],[99,2],[100,3]]),'Score caps use the 75/90/100 rating thresholds',JSON.stringify(result.ratingCaps));
 pass(!/Approximately 1 minutes\b/.test(result.homeText),'Home screen never renders “1 minutes”');
 pass(pageErrors.length===0,'P2 UI/default regression has no page errors',pageErrors.join(' | '));
 
