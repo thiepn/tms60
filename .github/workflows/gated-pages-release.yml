@@ -73,6 +73,7 @@ jobs:
             tests/p2-8-localized-tts-reference.mjs
             tests/p2-9-source-contract.mjs
             tests/p2-ui-defaults-regression.mjs
+            tests/typo-tolerance-regression.mjs
             tests/rc1-bible-gate.mjs
           )
 
@@ -103,6 +104,7 @@ jobs:
             tests/p2-8-localized-tts-reference.mjs
             tests/p2-9-source-contract.mjs
             tests/p2-ui-defaults-regression.mjs
+            tests/typo-tolerance-regression.mjs
             tests/rc1-bible-gate.mjs
           )
 
