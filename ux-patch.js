@@ -4,5 +4,5 @@
   const current = document.currentScript?.src || location.href;
   const base = new URL('.', current);
   const script = name => `<script src="${new URL(name, base).href}"><\/script>`;
-  document.write(script('ux-patch-core.js') + script('typo-tolerance.js') + script('typo-scoring-finalizer.js'));
+  document.write(script('ux-patch-core.js') + script('recall-reference-fix.js') + script('typo-tolerance.js') + script('typo-scoring-finalizer.js'));
 })();
