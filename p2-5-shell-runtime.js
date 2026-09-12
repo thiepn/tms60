@@ -121,24 +121,24 @@
   window.__TMS60_P27_SHELL_IDENTITY__ = '1.0.0';
 })();
 
-/* PWA bootstrap. The manifest and offline worker already live at the project root;
- * wire them into the shell without changing the memorization app itself. */
+/* PWA bootstrap. Give the project-path app an explicit identity and bypass any
+ * stale pre-PWA manifest cache when Samsung Internet evaluates installability. */
 (() => {
   if (!document.querySelector('link[rel="manifest"]')) {
     const manifest = document.createElement('link');
     manifest.rel = 'manifest';
-    manifest.href = './manifest.webmanifest';
+    manifest.href = '/tms60/manifest.webmanifest?v=2';
     document.head.appendChild(manifest);
   }
   if (!document.querySelector('link[rel="apple-touch-icon"]')) {
     const touchIcon = document.createElement('link');
     touchIcon.rel = 'apple-touch-icon';
-    touchIcon.href = './icon-192.png';
+    touchIcon.href = '/tms60/icon-192.png';
     document.head.appendChild(touchIcon);
   }
-  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(error => {
+      navigator.serviceWorker.register('/tms60/sw.js', { scope: '/tms60/' }).catch(error => {
         console.warn('TMS 60 service worker registration failed.', error);
       });
     }, { once: true });
