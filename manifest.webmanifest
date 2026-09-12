@@ -1,16 +1,18 @@
 {
+  "id": "/tms60/",
   "name": "TMS 60",
   "short_name": "TMS 60",
   "description": "Memorize the 60 verses of the Topical Memory System with guided learning and spaced review.",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/tms60/",
+  "scope": "/tms60/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#070809",
   "theme_color": "#070809",
+  "prefer_related_applications": false,
   "icons": [
-    {"src":"icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
-    {"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"},
-    {"src":"favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}
+    {"src":"/tms60/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"/tms60/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"},
+    {"src":"/tms60/favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}
   ]
 }
