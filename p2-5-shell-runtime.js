@@ -120,3 +120,27 @@
   window.__TMS60_P25_SHELL_RUNTIME__ = '1.0.0';
   window.__TMS60_P27_SHELL_IDENTITY__ = '1.0.0';
 })();
+
+/* PWA bootstrap. The manifest and offline worker already live at the project root;
+ * wire them into the shell without changing the memorization app itself. */
+(() => {
+  if (!document.querySelector('link[rel="manifest"]')) {
+    const manifest = document.createElement('link');
+    manifest.rel = 'manifest';
+    manifest.href = './manifest.webmanifest';
+    document.head.appendChild(manifest);
+  }
+  if (!document.querySelector('link[rel="apple-touch-icon"]')) {
+    const touchIcon = document.createElement('link');
+    touchIcon.rel = 'apple-touch-icon';
+    touchIcon.href = './icon-192.png';
+    document.head.appendChild(touchIcon);
+  }
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(error => {
+        console.warn('TMS 60 service worker registration failed.', error);
+      });
+    }, { once: true });
+  }
+})();
