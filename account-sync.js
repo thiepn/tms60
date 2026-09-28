@@ -111,6 +111,7 @@
     const code=String(error?.code||'');
     const message=String(error?.message||'');
     if(code==='access_denied'||/access denied/i.test(message))return 'Google sign-in was cancelled.';
+    if(code==='account_changed')return 'THIEPN Account changed while syncing. The old sync was stopped before its data could be applied; retry on the current account.';
     if(pkceMissing(error))return 'This Google sign-in attempt expired or lost its browser verifier. Start Google sign-in again from TMS60.';
     if(['refresh_token_not_found','refresh_token_already_used','session_not_found','session_expired','bad_jwt'].includes(code))return 'Your THIEPN Account session is no longer valid. Sign in again.';
     if(Number(error?.status)===429)return 'Too many account requests. Wait a moment, then retry.';
@@ -137,7 +138,9 @@
   let accountMessage='Local-only mode';
   let lastRemoteRevision=0;
   let lastRemoteUpdatedAt='';
+  let authEpoch=0;
   let syncPromise=null;
+  let syncPromiseUserId=null;
   let syncTimer=0;
   let pendingAutoSync=false;
   let restoreBackups=[];
@@ -164,6 +167,19 @@
 
   const isOnline=()=>navigator.onLine!==false;
   const signedIn=()=>Boolean(session?.user?.id);
+  function applySession(nextSession){
+    const previousId=session?.user?.id||null;
+    const nextId=nextSession?.user?.id||null;
+    if(previousId!==nextId){
+      authEpoch++;
+      restoreBackups=[];
+      accountMismatch=false;
+      lastRemoteRevision=0;
+      lastRemoteUpdatedAt='';
+    }
+    session=nextSession||null;
+    return session;
+  }
   const getLastSyncAt=()=>Math.max(0,Number(prefs.lastSyncByTranslation?.[TRANSLATION_ID])||0);
   const setLastSyncAt=value=>{prefs.lastSyncByTranslation[TRANSLATION_ID]=Math.max(0,Number(value)||0);writePrefs()};
   const getBoundUser=()=>String(prefs.boundUserByTranslation?.[TRANSLATION_ID]||'');
@@ -294,13 +310,12 @@
   async function currentSession(){
     const {data,error}=await client.auth.getSession();
     if(error)throw error;
-    session=data.session||null;
-    return session;
+    return applySession(data.session||null);
   }
 
-  async function markAppUsed(){
-    if(!signedIn())return;
-    const row={user_id:session.user.id,app_slug:APP_SLUG,last_used_at:new Date().toISOString(),source:'app'};
+  async function markAppUsed(userId=session?.user?.id){
+    if(!userId)return;
+    const row={user_id:userId,app_slug:APP_SLUG,last_used_at:new Date().toISOString(),source:'app'};
     const {error}=await client.from('account_user_apps').upsert(row,{onConflict:'user_id,app_slug'});
     if(error)console.warn('TMS60 app usage registration failed:',error.message);
   }
@@ -312,11 +327,11 @@
     return sanitizeState(row.state);
   }
 
-  async function pullRemote(){
-    if(!signedIn())throw new Error('Sign in before syncing.');
+  async function pullRemote(userId){
+    if(!userId)throw new Error('Sign in before syncing.');
     const {data,error}=await client.from('tms60_sync_state')
       .select('user_id,translation_id,revision,state_schema,state,state_hash,client_updated_at,device_id,updated_at')
-      .eq('user_id',session.user.id)
+      .eq('user_id',userId)
       .eq('translation_id',TRANSLATION_ID)
       .maybeSingle();
     if(error)throw error;
@@ -331,11 +346,11 @@
     return data||null;
   }
 
-  async function insertRemote(sourceState){
+  async function insertRemote(sourceState,userId){
     const clean=sanitizeState(sourceState);
     const json=JSON.stringify(clean);
     const payload={
-      user_id:session.user.id,
+      user_id:userId,
       translation_id:TRANSLATION_ID,
       revision:1,
       state_schema:SCHEMA,
@@ -353,7 +368,7 @@
     return lastRemoteRevision;
   }
 
-  async function updateRemoteCas(expectedRevision,sourceState){
+  async function updateRemoteCas(expectedRevision,sourceState,userId){
     const clean=sanitizeState(sourceState);
     const json=JSON.stringify(clean);
     const payload={
@@ -368,7 +383,7 @@
     assertCloudStateSize(json);
     const {data,error}=await client.from('tms60_sync_state')
       .update(payload)
-      .eq('user_id',session.user.id)
+      .eq('user_id',userId)
       .eq('translation_id',TRANSLATION_ID)
       .eq('revision',expectedRevision)
       .select('revision,updated_at')
@@ -399,12 +414,14 @@
     return true;
   }
 
-  async function runSyncAttempt(){
+  async function runSyncAttempt(userId,isCurrent){
     const localBefore=sanitizeState(state);
-    const remote=await pullRemote();
+    const remote=await pullRemote(userId);
+    if(!isCurrent())throw Object.assign(new Error('THIEPN Account changed while sync was running.'),{code:'account_changed'});
     if(!remote){
       try{
-        const revision=await insertRemote(localBefore);
+        const revision=await insertRemote(localBefore,userId);
+        if(!isCurrent())throw Object.assign(new Error('THIEPN Account changed while sync was running.'),{code:'account_changed'});
         return {revision,changedLocal:false,created:true};
       }catch(error){
         if(String(error?.code||'')==='23505'||Number(error?.status)===409)return null;
@@ -413,6 +430,7 @@
     }
 
     const remoteState=validateRemoteState(remote);
+    if(!isCurrent())throw Object.assign(new Error('THIEPN Account changed while sync was running.'),{code:'account_changed'});
     const merged=mergeStates(localBefore,remoteState);
     const changedLocal=JSON.stringify(merged)!==JSON.stringify(localBefore);
     if(changedLocal)persistMergedLocal(merged);
@@ -422,13 +440,19 @@
       return {revision:Number(remote.revision)||1,changedLocal,created:false};
     }
 
-    const revision=await updateRemoteCas(Number(remote.revision)||1,localNow);
+    const revision=await updateRemoteCas(Number(remote.revision)||1,localNow,userId);
+    if(!isCurrent())throw Object.assign(new Error('THIEPN Account changed while sync was running.'),{code:'account_changed'});
     if(revision==null)return null;
     return {revision,changedLocal,created:false};
   }
 
   async function performSync({manual=false}={}){
-    if(syncPromise)return syncPromise;
+    const requestedUserId=session?.user?.id||null;
+    if(syncPromise){
+      if(syncPromiseUserId===requestedUserId)return syncPromise;
+      try{await syncPromise}catch(_){}
+      if((session?.user?.id||null)!==requestedUserId)return null;
+    }
     if(!signedIn()){
       if(manual)throw new Error('Sign in to your THIEPN Account before syncing.');
       return null;
@@ -451,27 +475,38 @@
       return null;
     }
 
+    syncPromiseUserId=requestedUserId;
     syncPromise=(async()=>{
       setAccountStatus('syncing','Comparing local and cloud progress…');
       await currentSession();
       if(!signedIn())throw new Error('Your THIEPN Account session expired. Sign in again.');
-      await markAppUsed();
+      if(session.user.id!==requestedUserId)throw Object.assign(new Error('THIEPN Account changed while sync was starting.'),{code:'account_changed'});
+      const epoch=authEpoch;
+      const userId=requestedUserId;
+      const isCurrent=()=>authEpoch===epoch&&session?.user?.id===userId;
+      await markAppUsed(userId);
+      if(!isCurrent())throw Object.assign(new Error('THIEPN Account changed while sync was running.'),{code:'account_changed'});
 
       let result=null;
       for(let attempt=1;attempt<=MAX_SYNC_ATTEMPTS;attempt++){
-        result=await runSyncAttempt();
+        result=await runSyncAttempt(userId,isCurrent);
         if(result)break;
       }
       if(!result)throw new Error('Another device kept changing cloud progress. No data was lost; retry sync.');
+      if(!isCurrent())throw Object.assign(new Error('THIEPN Account changed while sync was running.'),{code:'account_changed'});
 
       setLastSyncAt(Date.now());
       pendingAutoSync=false;
       setAccountStatus('synced',result.changedLocal?'Synced — cloud progress merged safely':'Up to date');
       return result;
     })().catch(error=>{
-      setAccountStatus(isOnline()?'error':'offline',String(error?.message||error));
-      throw error;
-    }).finally(()=>{syncPromise=null});
+      const message=accountErrorMessage(error);
+      if(error?.code!=='account_changed')setAccountStatus(isOnline()?'error':'offline',message);
+      throw Object.assign(error instanceof Error?error:new Error(message),{message});
+    }).finally(()=>{
+      syncPromise=null;
+      syncPromiseUserId=null;
+    });
     return syncPromise;
   }
 
@@ -624,7 +659,7 @@
     clearTimeout(syncTimer);syncTimer=0;pendingAutoSync=false;
     const {error}=await client.auth.signOut({scope:'local'});
     if(error)throw error;
-    session=null;
+    applySession(null);
     accountMismatch=false;
     lastRemoteRevision=0;lastRemoteUpdatedAt='';
     setAccountStatus('local','Signed out — local progress remains on this device');
@@ -656,7 +691,7 @@
     if(result.error)throw result.error;
     cleanupCallbackUrl(url);
     clearPkceBackup();
-    session=result.data?.session||null;
+    applySession(result.data?.session||null);
     return Boolean(session);
   }
 
@@ -667,7 +702,7 @@
   }
 
   async function activateSession(nextSession,{sync=true}={}){
-    session=nextSession||null;
+    applySession(nextSession||null);
     if(!signedIn()){
       accountMismatch=false;
       setAccountStatus('local','Local-only mode');
@@ -700,7 +735,7 @@
 
   client.auth.onAuthStateChange((event,nextSession)=>{
     if(event==='INITIAL_SESSION')return;
-    session=nextSession||null;
+    applySession(nextSession||null);
     if(event==='SIGNED_OUT'){
       accountMismatch=false;
       lastRemoteRevision=0;lastRemoteUpdatedAt='';
