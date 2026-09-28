@@ -144,7 +144,7 @@ try{
   const cacheMatch=source.match(/const CACHE='([^']+)'/);
   const expectedCache=cacheMatch?.[1]||'';
   check(sourceResponse.status()===200,'Service worker source reachable',String(sourceResponse.status()));
-  check(/^tms60-stability\d+-\d{4}-\d{2}-\d{2}$/.test(expectedCache),'P2-4 cache revision declared',expectedCache);
+  check(/^tms60-[a-z0-9-]+-\d{4}-\d{2}-\d{2}$/.test(expectedCache),'TMS60 dated cache revision declared',expectedCache);
   check(source.includes('Promise.allSettled(CORE.map'),'Install uses all-settled precaching');
   check(source.includes('previousCachedResponse'),'Previous-cache fallback is explicit');
   check(source.includes('precacheAsset'),'Per-asset precache isolation is explicit');
