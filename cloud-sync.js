@@ -291,7 +291,7 @@
     if(currentJson===nextJson)return false;
     if(snapshot)createRecoverySnapshot();
     state=sanitizeState(next);
-    const result=save();
+    const result=baseSave();
     renderAll();
     return result!==false;
   }
@@ -427,7 +427,7 @@
     state=sanitizeState(restored);
     setNewEpoch();
     state.meta.settingsChangedAt=state.meta.stateEpoch;
-    save();
+    baseSave();
     renderAll();
     closeModal(false);
     const remote=await getRemoteSync();
