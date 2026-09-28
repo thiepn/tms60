@@ -1,0 +1,56 @@
+name: Supabase Account Sync Regression
+
+on:
+  pull_request:
+    paths:
+      - 'app.html'
+      - 'account-sync.js'
+      - 'vendor/supabase-2.116.0.js'
+      - 'vendor/LICENSE.supabase'
+      - 'sw.js'
+      - 'supabase/migrations/20260928194925_tms60_account_sync.sql'
+      - 'supabase/migrations/20260928203152_tms60_translation_isolation_hardening.sql'
+      - 'supabase/migrations/20260928203953_tms60_atomic_cloud_delete.sql'
+      - 'supabase/migrations/20260928204241_tms60_cloud_delete_identity_guard.sql'
+      - 'supabase/migrations/20260928205024_tms60_remove_redundant_sync_indexes.sql'
+      - 'tests/supabase-account-sync-regression.mjs'
+      - 'tests/supabase-account-sync-runtime.test.mjs'
+      - 'scripts/tms60-auth-diagnostic.mjs'
+      - '.github/workflows/supabase-account-sync-regression.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app.html'
+      - 'account-sync.js'
+      - 'vendor/supabase-2.116.0.js'
+      - 'vendor/LICENSE.supabase'
+      - 'sw.js'
+      - 'supabase/migrations/20260928194925_tms60_account_sync.sql'
+      - 'supabase/migrations/20260928203152_tms60_translation_isolation_hardening.sql'
+      - 'supabase/migrations/20260928203953_tms60_atomic_cloud_delete.sql'
+      - 'supabase/migrations/20260928204241_tms60_cloud_delete_identity_guard.sql'
+      - 'supabase/migrations/20260928205024_tms60_remove_redundant_sync_indexes.sql'
+      - 'tests/supabase-account-sync-regression.mjs'
+      - 'tests/supabase-account-sync-runtime.test.mjs'
+      - 'scripts/tms60-auth-diagnostic.mjs'
+      - '.github/workflows/supabase-account-sync-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  account-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify shared account, sync, backup, and RLS contracts
+        run: node tests/supabase-account-sync-regression.mjs
+      - name: Exercise account runtime failure paths
+        run: node --test tests/supabase-account-sync-runtime.test.mjs
+      - name: Verify live Google OAuth provider and TMS60 redirect allowlist
+        run: node scripts/tms60-auth-diagnostic.mjs

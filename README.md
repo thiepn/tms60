@@ -8,7 +8,7 @@
 
 <br><br>
 
-<img src="https://readme-typing-svg.demolab.com?font=Georgia&weight=600&size=24&duration=2800&pause=900&color=16A34A&center=true&vCenter=true&width=760&lines=Memorize+all+60+TMS+verses.;Practice+exact+word-for-word+recall.;Build+durable+long-term+memory.;Fully+offline.+Private.+No+account." alt="Animated project description">
+<img src="https://readme-typing-svg.demolab.com?font=Georgia&weight=600&size=24&duration=2800&pause=900&color=16A34A&center=true&vCenter=true&width=760&lines=Memorize+all+60+TMS+verses.;Practice+exact+word-for-word+recall.;Build+durable+long-term+memory.;Offline-first.+Private.+Account+optional." alt="Animated project description">
 
 <br>
 
@@ -43,7 +43,7 @@ It guides each verse through a structured progression:
 | First letters | Fixed-size study sessions | Keyboard and touch support |
 | Flashcards | Weak-word diagnostics | Light/dark mode |
 | Reference recall | Pack assessments | 8 accent colors |
-| Phrase build-up | Placement testing | Import/export backups |
+| Phrase build-up | Placement testing | Local + THIEPN Account backups |
 | Listen and repeat | Detailed review history | Print-friendly library |
 
 ## Start memorizing
@@ -66,11 +66,24 @@ It guides each verse through a structured progression:
 3. Start studying
 ```
 
-Your progress stays in your browser. Use the built-in **Export Progress** option to keep backups.
+Your progress is always saved locally first. Use **Export Progress** for portable JSON backups, or optionally sign in to your shared THIEPN Account for Supabase-backed cross-device sync and private cloud recovery points.
+
+## Optional THIEPN Account sync
+
+TMS60 does not require an account. When signed in, it uses the same shared THIEPN Account identity as the other ecosystem apps:
+
+- **Google OAuth through Supabase Auth**
+- one shared browser account session on the same origin
+- TMS60-owned, user-isolated sync data protected by Row Level Security
+- automatic and manual cross-device synchronization
+- private cloud backups with protected restore
+- local-first offline study that continues without network access
+
+TMS60 stores its app data separately from other THIEPN apps. Signing in shares identity, not application data.
 
 ## Built for focused memorization
 
-No login. No advertisements. No cloud dependency. No distractions.
+No login required. No advertisements. No cloud dependency for normal study. No distractions.
 
 Just the text, deliberate recall, intelligent review, and steady progress through all 60 verses.
 
