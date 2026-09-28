@@ -1,8 +1,8 @@
 const SUPABASE_URL='https://hycegznamzjhwinegaai.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_1rZzRPzfLMaAH5pIgCwIjA_19UPMIsR';
 const redirects=[
-  'https://thiepn.dev/tms60/',
-  'https://thiepn.github.io/tms60/',
+  'https://thiepn.dev/tms60/?tms60_auth=1',
+  'https://thiepn.github.io/tms60/?tms60_auth=1',
 ];
 
 const result={
