@@ -275,7 +275,7 @@
       <label class="switch-row account-switch"><span><strong>Automatic sync</strong><br><span class="tiny muted">After local progress is saved, synchronize the active Bible version when signed in and online.</span></span><input type="checkbox" id="tms60-auto-sync" ${prefs.autoSync?'checked':''} ${accountMismatch?'disabled':''}></label>
       <p class="account-note">${accountMismatch
         ?'This Bible version has local progress linked to a different THIEPN Account. Cloud access is blocked to prevent cross-account data mixing. Use the explicit switch action if you intend to move this local version to the current account.'
-        :'Progress is always written locally first. TMS60 cloud rows are private to your account through Supabase Row Level Security. Signing out clears the shared THIEPN Account session on this browser origin but does not delete local progress.'}</p>
+        :'Progress is always written locally first. TMS60 cloud rows are private to your account through Supabase Row Level Security. Signing out clears the shared THIEPN Account session on this browser origin but does not delete local progress. Reset Everything is local-only and pauses sync; use Delete cloud data to erase the cloud copy.'}</p>
     </article>`;
   }
 
@@ -813,6 +813,19 @@
       refreshAccountPanel();
     }
   }
+
+  document.addEventListener('click',event=>{
+    const button=event.target.closest?.('[data-action="reset-all"]');
+    if(!button||!signedIn())return;
+    // "Reset everything" is explicitly a local reset and the top-level shell
+    // reloads almost immediately. Pause sync first so cloud state cannot
+    // repopulate the freshly-reset browser before the user chooses to sync.
+    prefs.autoSync=false;
+    pendingAutoSync=false;
+    clearTimeout(syncTimer);syncTimer=0;
+    writePrefs();
+    setAccountStatus('local','Local reset requested — automatic sync paused; cloud recovery data was kept');
+  },true);
 
   document.addEventListener('click',event=>{
     const button=event.target.closest('[data-account-action]');
