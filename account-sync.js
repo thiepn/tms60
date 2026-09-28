@@ -97,9 +97,10 @@
     authStorage.removeItem(key);
   }
   function accountFetch(input,options={}){
-    const timeout=typeof AbortSignal?.timeout==='function'?AbortSignal.timeout(15000):null;
-    const signal=options.signal&&timeout&&typeof AbortSignal?.any==='function'
-      ?AbortSignal.any([options.signal,timeout])
+    const signalApi=globalThis.AbortSignal;
+    const timeout=typeof signalApi?.timeout==='function'?signalApi.timeout(15000):null;
+    const signal=options.signal&&timeout&&typeof signalApi?.any==='function'
+      ?signalApi.any([options.signal,timeout])
       :(options.signal||timeout||undefined);
     return fetch(input,{...options,signal});
   }
@@ -113,7 +114,7 @@
     if(code==='access_denied'||/access denied/i.test(message))return 'Google sign-in was cancelled.';
     if(code==='account_changed')return 'THIEPN Account changed while syncing. The old sync was stopped before its data could be applied; retry on the current account.';
     if(pkceMissing(error))return 'This Google sign-in attempt expired or lost its browser verifier. Start Google sign-in again from TMS60.';
-    if(['refresh_token_not_found','refresh_token_already_used','session_not_found','session_expired','bad_jwt'].includes(code))return 'Your THIEPN Account session is no longer valid. Sign in again.';
+    if(['refresh_token_not_found','refresh_token_already_used','session_not_found','session_expired','bad_jwt'].includes(code)||Number(error?.status)===401)return 'Your THIEPN Account session is no longer valid. Sign in again.';
     if(Number(error?.status)===429)return 'Too many account requests. Wait a moment, then retry.';
     if(/redirect.*not.*allowed|redirect_to/i.test(message))return 'TMS60 is not yet allowed as an OAuth return URL in the shared THIEPN Account project.';
     if(/row-level security|permission denied|42501/i.test(message))return 'TMS60 cloud permissions were rejected. Sign out and back in; if this persists, the account deployment is incomplete.';
