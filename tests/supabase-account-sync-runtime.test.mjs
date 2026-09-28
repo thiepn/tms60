@@ -579,3 +579,40 @@ test('full local reset is cancelled if the cloud-sync pause cannot be persisted'
   assert.equal(result.prevented,true);
   assert.equal(result.immediateStopped,true);
 });
+
+
+test('explicit account switch adopts the new account state without uploading old local progress',async()=>{
+  const remoteState=makeState('account-b');
+  const db={
+    sync:new Map([['user-b|esv',{
+      user_id:'user-b',
+      translation_id:'esv',
+      revision:3,
+      state_schema:6,
+      state:clone(remoteState),
+      updated_at:'2026-09-28T20:00:00Z'
+    }]]),
+    backups:[],
+    apps:[]
+  };
+  const session={user:{id:'user-b',email:'b@example.test'},access_token:'b',refresh_token:'r2',expires_at:9999999999};
+  const prefs=JSON.stringify({
+    autoSync:true,
+    deviceId:'device-test',
+    lastSyncByTranslation:{esv:1},
+    boundUserByTranslation:{esv:'user-a'}
+  });
+  const runtime=createRuntime({initialLocal:{'tms60-account-sync-prefs-v1':prefs},session,db});
+  runtime.context.state=makeState('account-a-local');
+  await wait(30);
+
+  await runtime.dispatchClick('switch-account');
+  await wait(80);
+
+  const savedPrefs=JSON.parse(runtime.localStorage.getItem('tms60-account-sync-prefs-v1'));
+  assert.equal(runtime.context.exportCount,1);
+  assert.equal(runtime.context.state.marker,'account-b');
+  assert.equal(savedPrefs.boundUserByTranslation.esv,'user-b');
+  assert.equal(savedPrefs.rebindRequired,false);
+  assert.equal(db.sync.get('user-b|esv')?.state?.marker,'account-b');
+});
