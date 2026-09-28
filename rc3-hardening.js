@@ -93,30 +93,32 @@
     return reconcileProofCounters(originalSanitizeState(raw));
   };
 
-  compareText = function(target, input) {
-    const safeTarget = String(target || '').slice(0, MAX_ANSWER_CHARS);
-    const safeInput = String(input || '').slice(0, MAX_ANSWER_CHARS);
-    const ops = alignWords(safeTarget, safeInput);
-    const correct = ops.filter(o => o.type === 'ok').length;
-    const targetWords = wordTokens(safeTarget).map(normWord);
-    const inputWords = wordTokens(safeInput).map(normWord);
-    const targetN = targetWords.length, inputN = inputWords.length;
-    const wordScore = targetN ? 100 * correct / Math.max(targetN, inputN) : 100;
-    const wordExact = targetN === inputN && targetWords.every((w,i) => w === inputWords[i]);
-    const ct = cleanText(safeTarget), ci = cleanText(safeInput);
-    const surfaceExact = ct === ci;
-    const charScore = ct.length ? 100 * (1 - levenshtein(ct, ci) / Math.max(ct.length, ci.length, 1)) : 100;
-    const weighted = Math.round(.9 * wordScore + .1 * Math.max(0, charScore));
-    const score = wordExact ? 100 : Math.min(99, weighted);
-    return {
-      score: clamp(score,0,100), wordScore: Math.round(wordScore), charScore: Math.round(Math.max(0,charScore)),
-      exact: wordExact, surfaceExact, characterExact: surfaceExact, punctuationEquivalent: wordExact,
-      targetText: ct, inputText: ci, ops,
-      wrong: ops.filter(o=>o.type==='wrong').map(o=>o.target),
-      missing: ops.filter(o=>o.type==='missing').map(o=>o.target),
-      extra: ops.filter(o=>o.type==='extra').map(o=>o.input)
+  if (!window.__TMS60_TYPO_SCORING_FINALIZER__) {
+    compareText = function(target, input) {
+      const safeTarget = String(target || '').slice(0, MAX_ANSWER_CHARS);
+      const safeInput = String(input || '').slice(0, MAX_ANSWER_CHARS);
+      const ops = alignWords(safeTarget, safeInput);
+      const correct = ops.filter(o => o.type === 'ok').length;
+      const targetWords = wordTokens(safeTarget).map(normWord);
+      const inputWords = wordTokens(safeInput).map(normWord);
+      const targetN = targetWords.length, inputN = inputWords.length;
+      const wordScore = targetN ? 100 * correct / Math.max(targetN, inputN) : 100;
+      const wordExact = targetN === inputN && targetWords.every((w,i) => w === inputWords[i]);
+      const ct = cleanText(safeTarget), ci = cleanText(safeInput);
+      const surfaceExact = ct === ci;
+      const charScore = ct.length ? 100 * (1 - levenshtein(ct, ci) / Math.max(ct.length, ci.length, 1)) : 100;
+      const weighted = Math.round(.9 * wordScore + .1 * Math.max(0, charScore));
+      const score = wordExact ? 100 : Math.min(99, weighted);
+      return {
+        score: clamp(score,0,100), wordScore: Math.round(wordScore), charScore: Math.round(Math.max(0,charScore)),
+        exact: wordExact, surfaceExact, characterExact: surfaceExact, punctuationEquivalent: wordExact,
+        targetText: ct, inputText: ci, ops,
+        wrong: ops.filter(o=>o.type==='wrong').map(o=>o.target),
+        missing: ops.filter(o=>o.type==='missing').map(o=>o.target),
+        extra: ops.filter(o=>o.type==='extra').map(o=>o.input)
+      };
     };
-  };
+  }
 
   buildGuidedQueue = function() {
     const t = now(), goal = state.settings.dailyGoal, seed = `guided-${localDayKey(t)}-${state.events.length}`;
