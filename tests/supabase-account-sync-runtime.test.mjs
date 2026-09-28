@@ -446,3 +446,40 @@ test('unknown future translation keys derive an isolated cloud id instead of fal
   assert.ok(db.sync.has('user-a|futurex'));
   assert.equal(db.sync.has('user-a|esv'),false);
 });
+
+
+test('restoring the oldest retained backup still works after safety-backup pruning',async()=>{
+  const session={user:{id:'user-a',email:'a@example.test'},access_token:'a',refresh_token:'r',expires_at:9999999999};
+  const current=makeState('current');
+  const backups=Array.from({length:7},(_,index)=>({
+    id:`b${index+1}`,
+    user_id:'user-a',
+    translation_id:'esv',
+    state_schema:6,
+    state:makeState(index===6?'oldest':`backup-${index+1}`),
+    source_revision:index+1,
+    created_at:new Date(Date.UTC(2026,8,28,20,0,index)).toISOString()
+  }));
+  const db={
+    sync:new Map([['user-a|esv',{user_id:'user-a',translation_id:'esv',revision:4,state_schema:6,state:clone(current),updated_at:'2026-09-28T20:00:00Z'}]]),
+    backups,
+    apps:[]
+  };
+  const prefs=JSON.stringify({
+    autoSync:false,
+    deviceId:'device-test',
+    lastSyncByTranslation:{esv:1},
+    boundUserByTranslation:{esv:'user-a'}
+  });
+  const runtime=createRuntime({initialLocal:{'tms60-account-sync-prefs-v1':prefs},session,db});
+  await wait(30);
+
+  await runtime.dispatchClick('restore-backup');
+  await wait(30);
+  await runtime.dispatchClick('restore-backup-file',{backupIndex:'6'});
+  await wait(80);
+
+  assert.equal(runtime.context.state.marker,'oldest');
+  assert.equal(db.sync.get('user-a|esv')?.state?.marker,'oldest');
+  assert.ok(db.backups.length<=7);
+});
