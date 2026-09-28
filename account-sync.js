@@ -212,6 +212,18 @@
   const getLastSyncAt=()=>Math.max(0,Number(prefs.lastSyncByTranslation?.[TRANSLATION_ID])||0);
   const setLastSyncAt=value=>{prefs.lastSyncByTranslation[TRANSLATION_ID]=Math.max(0,Number(value)||0);writePrefs()};
   const getBoundUser=()=>String(prefs.boundUserByTranslation?.[TRANSLATION_ID]||'');
+  const localHasMeaningfulProgress=()=>Boolean(
+    state?.events?.length||
+    state?.assessments?.length||
+    Object.values(state?.progress||{}).some(p=>p&&(
+      Number(p.stage)>0||
+      Number(p.attempts)>0||
+      Number(p.resetAt)>0||
+      Boolean(p.starred)||
+      Number(p.wording?.reps)>0||
+      Number(p.reference?.reps)>0
+    ))
+  );
   const setBoundUser=value=>{
     const previous=getBoundUser();
     const previousRebind=Boolean(prefs.rebindRequired);
@@ -224,14 +236,25 @@
     prefs.rebindRequired=previousRebind;
     return false;
   };
+  function bindingIssue(){
+    if(!prefsWritable)return 'storage';
+    if(prefs.rebindRequired)return 'rebind';
+    const bound=getBoundUser();
+    if(!bound&&signedIn()&&localHasMeaningfulProgress())return 'unbound-local';
+    if(bound&&signedIn()&&bound!==String(session.user.id))return 'different-account';
+    return null;
+  }
   function bindingBlockMessage(){
-    if(!prefsWritable)return 'Account sync safety settings cannot be saved in browser storage. Cloud sync is blocked until site storage works again.';
-    if(prefs.rebindRequired)return 'Account sync safety settings were recovered after invalid browser data. Explicitly choose the current account before syncing this Bible version.';
+    const issue=bindingIssue();
+    if(issue==='storage')return 'Account sync safety settings cannot be saved in browser storage. Cloud sync is blocked until site storage works again.';
+    if(issue==='rebind')return 'Account sync safety settings were recovered after invalid browser data. Explicitly choose the current account before syncing this Bible version.';
+    if(issue==='unbound-local')return 'Existing local progress has not been linked to a THIEPN Account yet. Confirm the current account before any cloud merge or upload.';
     return 'This Bible version is linked to a different THIEPN Account. Use the explicit account-switch action before syncing.';
   }
   function ensureAccountBinding(){
     if(!signedIn()){accountMismatch=false;return false}
-    if(!prefsWritable||prefs.rebindRequired){accountMismatch=true;return false}
+    const issue=bindingIssue();
+    if(issue){accountMismatch=true;return false}
     const current=String(session.user.id),bound=getBoundUser();
     if(!bound){
       if(!setBoundUser(current)){accountMismatch=true;return false}
@@ -313,8 +336,11 @@
       <div class="account-actions">
         ${signedIn()
           ? accountMismatch
-            ? `<button class="btn primary" data-account-action="confirm-switch-account">Use this account for ${htmlEsc(TRANSLATION_ID)}</button>
-               <button class="btn" data-account-action="sign-out">Sign out</button>`
+            ? bindingIssue()==='unbound-local'
+              ? `<button class="btn primary" data-account-action="confirm-link-account">Link local progress to this account</button>
+                 <button class="btn" data-account-action="sign-out">Sign out</button>`
+              : `<button class="btn primary" data-account-action="confirm-switch-account">Use this account for ${htmlEsc(TRANSLATION_ID)}</button>
+                 <button class="btn" data-account-action="sign-out">Sign out</button>`
             : `<button class="btn primary" data-account-action="sync-now" ${!isOnline()?'disabled':''}>Sync now</button>
                <button class="btn" data-account-action="create-backup" ${!isOnline()?'disabled':''}>Cloud backup</button>
                <button class="btn" data-account-action="restore-backup" ${!isOnline()?'disabled':''}>Restore backup</button>
@@ -754,10 +780,11 @@
     }
     const flowId=callbackFlowId||storedFlowId||null;
     if(authError){
+      const errorCode=url.searchParams.get('error')||url.searchParams.get('error_code')||'oauth_error';
       cleanupCallbackUrl(url);
       clearPkceBackup();
       const error=new Error(authError);
-      error.code=url.searchParams.get('error')||url.searchParams.get('error_code')||'oauth_error';
+      error.code=errorCode;
       throw error;
     }
     if(!code)return false;
@@ -842,6 +869,20 @@
       else if(action==='restore-backup')await openRestoreBackups();
       else if(action==='restore-backup-file')await restoreBackup(button.dataset.backupIndex);
       else if(action==='sign-out')await signOut();
+      else if(action==='confirm-link-account'){
+        modal(`<div class="modal-head"><h2>Link local progress to this THIEPN Account?</h2><button class="btn icon-btn" data-action="close-modal" aria-label="Close dialog">×</button></div>
+          <p>Your existing local <strong>${htmlEsc(TRANSLATION_ID)}</strong> progress will be linked to the currently signed-in THIEPN Account. If that account already has cloud progress for this Bible version, TMS60 will merge the two conservatively.</p>
+          <div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-account-action="link-account">Link &amp; sync</button></div>`);
+      }else if(action==='link-account'){
+        if(hasActiveSession())throw new Error('End the active recall session before linking an account.');
+        createRecoverySnapshot();
+        if(!setBoundUser(session.user.id))throw new Error('The account binding could not be saved. Cloud sync remains blocked.');
+        accountMismatch=false;
+        closeModal(false);
+        refreshAccountPanel();
+        await performSync({manual:true});
+        toast('Local progress is now linked to this THIEPN Account.');
+      }
       else if(action==='confirm-switch-account'){
         modal(`<div class="modal-head"><h2>Switch this Bible version to the current account?</h2><button class="btn icon-btn" data-action="close-modal" aria-label="Close dialog">×</button></div>
           <p>TMS60 will export the current <strong>${htmlEsc(TRANSLATION_ID)}</strong> local progress first, create a recovery snapshot, then clear this local version before loading the current THIEPN Account's cloud state. This prevents two accounts from being merged.</p>
