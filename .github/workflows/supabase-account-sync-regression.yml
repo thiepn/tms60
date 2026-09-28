@@ -1,0 +1,40 @@
+name: Supabase Account Sync Regression
+
+on:
+  pull_request:
+    paths:
+      - 'app.html'
+      - 'account-sync.js'
+      - 'vendor/supabase-2.116.0.js'
+      - 'vendor/LICENSE.supabase'
+      - 'sw.js'
+      - 'supabase/migrations/20260928194925_tms60_account_sync.sql'
+      - 'tests/supabase-account-sync-regression.mjs'
+      - '.github/workflows/supabase-account-sync-regression.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app.html'
+      - 'account-sync.js'
+      - 'vendor/supabase-2.116.0.js'
+      - 'vendor/LICENSE.supabase'
+      - 'sw.js'
+      - 'supabase/migrations/20260928194925_tms60_account_sync.sql'
+      - 'tests/supabase-account-sync-regression.mjs'
+      - '.github/workflows/supabase-account-sync-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  account-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify shared account, sync, backup, and RLS contracts
+        run: node tests/supabase-account-sync-regression.mjs
