@@ -23,7 +23,12 @@
     'tms60-sch1951-memory-lab-v1':'schlachter1951',
     'tms60-klb1985-memory-lab-v1':'klb1985',
     'tms60-krv1961-memory-lab-v1':'krv1961'
-  })[KEY]||'esv';
+  })[KEY]||(()=>{
+    const key=String(KEY||'').toLowerCase();
+    const match=/^tms60-(.+)-memory-lab-v\d+$/.exec(key);
+    const derived=String(match?.[1]||key).replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40);
+    return derived||'unknown';
+  })();
 
   if(!window.supabase?.createClient){
     console.error('TMS60 account sync unavailable: Supabase client did not load.');
@@ -112,12 +117,14 @@
     const code=String(error?.code||'');
     const message=String(error?.message||'');
     if(code==='access_denied'||/access denied/i.test(message))return 'Google sign-in was cancelled.';
-    if(code==='account_changed')return 'THIEPN Account changed while syncing. The old sync was stopped before its data could be applied; retry on the current account.';
+    if(code==='account_changed')return 'THIEPN Account changed while syncing. The old operation was stopped before its data could be applied; retry on the current account.';
+    if(code==='oauth_flow_mismatch')return 'This Google sign-in callback belongs to a different or older sign-in attempt. Start Google sign-in again from TMS60.';
     if(pkceMissing(error))return 'This Google sign-in attempt expired or lost its browser verifier. Start Google sign-in again from TMS60.';
     if(['refresh_token_not_found','refresh_token_already_used','session_not_found','session_expired','bad_jwt'].includes(code)||Number(error?.status)===401)return 'Your THIEPN Account session is no longer valid. Sign in again.';
     if(Number(error?.status)===429)return 'Too many account requests. Wait a moment, then retry.';
     if(/redirect.*not.*allowed|redirect_to/i.test(message))return 'TMS60 is not yet allowed as an OAuth return URL in the shared THIEPN Account project.';
-    if(/row-level security|permission denied|42501/i.test(message))return 'TMS60 cloud permissions were rejected. Sign out and back in; if this persists, the account deployment is incomplete.';
+    if(code==='42501'&&/account changed/i.test(message))return 'THIEPN Account changed during the protected operation. No cross-account action was allowed; retry on the intended account.';
+    if(code==='42501'||/row-level security|permission denied|42501/i.test(message))return 'TMS60 cloud permissions were rejected. Sign out and back in; if this persists, the account deployment is incomplete.';
     if(Number(error?.status)>=500||['AbortError','TimeoutError','AuthRetryableFetchError','TypeError'].includes(error?.name))return 'The THIEPN Account service could not be reached. Local progress is safe; retry when connected.';
     return message||'The THIEPN Account operation failed.';
   }
@@ -174,7 +181,8 @@
     if(previousId!==nextId){
       authEpoch++;
       restoreBackups=[];
-      accountMismatch=false;
+      const bound=String(prefs.boundUserByTranslation?.[TRANSLATION_ID]||'');
+      accountMismatch=Boolean(nextId&&bound&&bound!==nextId);
       lastRemoteRevision=0;
       lastRemoteUpdatedAt='';
     }
@@ -690,6 +698,13 @@
     const code=url.searchParams.get('code');
     const callbackFlowId=url.searchParams.get('sb_flow_id');
     const storedFlowId=(()=>{try{return sessionStorage.getItem(PKCE_FLOW_KEY)}catch(_){return null}})();
+    if(callbackFlowId&&storedFlowId&&callbackFlowId!==storedFlowId){
+      cleanupCallbackUrl(url);
+      clearPkceBackup();
+      const error=new Error('OAuth flow mismatch');
+      error.code='oauth_flow_mismatch';
+      throw error;
+    }
     const flowId=callbackFlowId||storedFlowId||null;
     if(authError){
       cleanupCallbackUrl(url);
@@ -839,6 +854,10 @@
   document.addEventListener('change',event=>{
     if(event.target.id!=='tms60-auto-sync')return;
     prefs.autoSync=Boolean(event.target.checked);
+    if(!prefs.autoSync){
+      pendingAutoSync=false;
+      clearTimeout(syncTimer);syncTimer=0;
+    }
     writePrefs();
     if(prefs.autoSync&&!accountMismatch)queueAutoSync();
     refreshAccountPanel();
