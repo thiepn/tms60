@@ -153,16 +153,25 @@
   let pendingAutoSync=false;
   let restoreBackups=[];
   let accountMismatch=false;
+  let prefsCorrupt=false;
+  let prefsWritable=true;
 
-  const safeParse=(raw,fallback)=>{try{return JSON.parse(raw)}catch(_){return fallback}};
   const readPrefs=()=>{
     try{
-      const raw=safeParse(localStorage.getItem(PREF_KEY),{});
-      return raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
-    }catch(_){return{}}
+      const stored=localStorage.getItem(PREF_KEY);
+      if(!stored)return{};
+      const raw=JSON.parse(stored);
+      if(raw&&typeof raw==='object'&&!Array.isArray(raw))return raw;
+      prefsCorrupt=true;
+      return{};
+    }catch(_){
+      prefsCorrupt=true;
+      return{};
+    }
   };
   const prefs=readPrefs();
-  if(typeof prefs.autoSync!=='boolean')prefs.autoSync=true;
+  if(prefsCorrupt)prefs.rebindRequired=true;
+  if(typeof prefs.autoSync!=='boolean')prefs.autoSync=prefsCorrupt?false:true;
   if(!prefs.lastSyncByTranslation||typeof prefs.lastSyncByTranslation!=='object'||Array.isArray(prefs.lastSyncByTranslation))prefs.lastSyncByTranslation={};
   if(Number.isFinite(Number(prefs.lastSyncAt))&&Number(prefs.lastSyncAt)>0&&!prefs.lastSyncByTranslation[TRANSLATION_ID])prefs.lastSyncByTranslation[TRANSLATION_ID]=Number(prefs.lastSyncAt);
   delete prefs.lastSyncAt;
@@ -170,7 +179,18 @@
   if(!prefs.deviceId){
     prefs.deviceId=(crypto.randomUUID?.()||`device-${Date.now()}-${Math.random().toString(36).slice(2)}`).slice(0,120);
   }
-  const writePrefs=()=>{try{localStorage.setItem(PREF_KEY,JSON.stringify(prefs))}catch(_){}};
+  const writePrefs=()=>{
+    try{
+      const text=JSON.stringify(prefs);
+      localStorage.setItem(PREF_KEY,text);
+      if(localStorage.getItem(PREF_KEY)!==text)throw new Error('preference_verification_failed');
+      prefsWritable=true;
+      return true;
+    }catch(_){
+      prefsWritable=false;
+      return false;
+    }
+  };
   writePrefs();
 
   const isOnline=()=>navigator.onLine!==false;
@@ -192,11 +212,32 @@
   const getLastSyncAt=()=>Math.max(0,Number(prefs.lastSyncByTranslation?.[TRANSLATION_ID])||0);
   const setLastSyncAt=value=>{prefs.lastSyncByTranslation[TRANSLATION_ID]=Math.max(0,Number(value)||0);writePrefs()};
   const getBoundUser=()=>String(prefs.boundUserByTranslation?.[TRANSLATION_ID]||'');
-  const setBoundUser=value=>{if(value)prefs.boundUserByTranslation[TRANSLATION_ID]=String(value);else delete prefs.boundUserByTranslation[TRANSLATION_ID];writePrefs()};
+  const setBoundUser=value=>{
+    const previous=getBoundUser();
+    const previousRebind=Boolean(prefs.rebindRequired);
+    if(value)prefs.boundUserByTranslation[TRANSLATION_ID]=String(value);
+    else delete prefs.boundUserByTranslation[TRANSLATION_ID];
+    if(value)prefs.rebindRequired=false;
+    if(writePrefs())return true;
+    if(previous)prefs.boundUserByTranslation[TRANSLATION_ID]=previous;
+    else delete prefs.boundUserByTranslation[TRANSLATION_ID];
+    prefs.rebindRequired=previousRebind;
+    return false;
+  };
+  function bindingBlockMessage(){
+    if(!prefsWritable)return 'Account sync safety settings cannot be saved in browser storage. Cloud sync is blocked until site storage works again.';
+    if(prefs.rebindRequired)return 'Account sync safety settings were recovered after invalid browser data. Explicitly choose the current account before syncing this Bible version.';
+    return 'This Bible version is linked to a different THIEPN Account. Use the explicit account-switch action before syncing.';
+  }
   function ensureAccountBinding(){
     if(!signedIn()){accountMismatch=false;return false}
+    if(!prefsWritable||prefs.rebindRequired){accountMismatch=true;return false}
     const current=String(session.user.id),bound=getBoundUser();
-    if(!bound){setBoundUser(current);accountMismatch=false;return true}
+    if(!bound){
+      if(!setBoundUser(current)){accountMismatch=true;return false}
+      accountMismatch=false;
+      return true;
+    }
     accountMismatch=bound!==current;
     return !accountMismatch;
   }
@@ -283,7 +324,7 @@
       </div>
       <label class="switch-row account-switch"><span><strong>Automatic sync</strong><br><span class="tiny muted">After local progress is saved, synchronize the active Bible version when signed in and online.</span></span><input type="checkbox" id="tms60-auto-sync" ${prefs.autoSync?'checked':''} ${accountMismatch?'disabled':''}></label>
       <p class="account-note">${accountMismatch
-        ?'This Bible version has local progress linked to a different THIEPN Account. Cloud access is blocked to prevent cross-account data mixing. Use the explicit switch action if you intend to move this local version to the current account.'
+        ?htmlEsc(bindingBlockMessage())
         :'Progress is always written locally first. TMS60 cloud rows are private to your account through Supabase Row Level Security. Signing out clears the shared THIEPN Account session on this browser origin but does not delete local progress. Reset Everything is local-only and pauses sync; use Delete cloud data to erase the cloud copy.'}</p>
     </article>`;
   }
@@ -467,7 +508,7 @@
       return null;
     }
     if(accountMismatch||!ensureAccountBinding()){
-      const message='This Bible version is linked to a different THIEPN Account. Use the explicit account-switch action before syncing.';
+      const message=bindingBlockMessage();
       setAccountStatus('error',message);
       if(manual)throw new Error(message);
       return null;
@@ -742,7 +783,7 @@
       return;
     }
     if(!ensureAccountBinding()){
-      setAccountStatus('error','Different THIEPN Account detected. Cloud access is blocked for this Bible version until you explicitly switch its local binding.');
+      setAccountStatus('error',bindingBlockMessage());
       await markAppUsed();
       return;
     }
@@ -803,12 +844,13 @@
           <div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn danger" data-account-action="switch-account">Export &amp; switch</button></div>`);
       }else if(action==='switch-account'){
         if(hasActiveSession())throw new Error('End the active recall session before switching accounts.');
+        if(!writePrefs())throw new Error('Browser storage cannot safely save the account switch. Free site storage or allow site data, then retry.');
         exportJSON();
         createRecoverySnapshot();
         storageWriteBlocked=false;storageBlockMessage='';
         state=defaultState(0);
         if(!coreSave())throw new Error('The new account state could not be stored locally.');
-        setBoundUser(session.user.id);
+        if(!setBoundUser(session.user.id))throw new Error('The account binding could not be saved. Your exported backup is safe; cloud sync remains blocked.');
         accountMismatch=false;
         setLastSyncAt(0);
         lastRemoteRevision=0;lastRemoteUpdatedAt='';
