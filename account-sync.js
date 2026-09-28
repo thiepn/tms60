@@ -141,6 +141,7 @@
   let syncTimer=0;
   let pendingAutoSync=false;
   let restoreBackups=[];
+  let accountMismatch=false;
 
   const safeParse=(raw,fallback)=>{try{return JSON.parse(raw)}catch(_){return fallback}};
   const readPrefs=()=>{
@@ -154,6 +155,7 @@
   if(!prefs.lastSyncByTranslation||typeof prefs.lastSyncByTranslation!=='object'||Array.isArray(prefs.lastSyncByTranslation))prefs.lastSyncByTranslation={};
   if(Number.isFinite(Number(prefs.lastSyncAt))&&Number(prefs.lastSyncAt)>0&&!prefs.lastSyncByTranslation[TRANSLATION_ID])prefs.lastSyncByTranslation[TRANSLATION_ID]=Number(prefs.lastSyncAt);
   delete prefs.lastSyncAt;
+  if(!prefs.boundUserByTranslation||typeof prefs.boundUserByTranslation!=='object'||Array.isArray(prefs.boundUserByTranslation))prefs.boundUserByTranslation={};
   if(!prefs.deviceId){
     prefs.deviceId=(crypto.randomUUID?.()||`device-${Date.now()}-${Math.random().toString(36).slice(2)}`).slice(0,120);
   }
@@ -164,6 +166,15 @@
   const signedIn=()=>Boolean(session?.user?.id);
   const getLastSyncAt=()=>Math.max(0,Number(prefs.lastSyncByTranslation?.[TRANSLATION_ID])||0);
   const setLastSyncAt=value=>{prefs.lastSyncByTranslation[TRANSLATION_ID]=Math.max(0,Number(value)||0);writePrefs()};
+  const getBoundUser=()=>String(prefs.boundUserByTranslation?.[TRANSLATION_ID]||'');
+  const setBoundUser=value=>{if(value)prefs.boundUserByTranslation[TRANSLATION_ID]=String(value);else delete prefs.boundUserByTranslation[TRANSLATION_ID];writePrefs()};
+  function ensureAccountBinding(){
+    if(!signedIn()){accountMismatch=false;return false}
+    const current=String(session.user.id),bound=getBoundUser();
+    if(!bound){setBoundUser(current);accountMismatch=false;return true}
+    accountMismatch=bound!==current;
+    return !accountMismatch;
+  }
   const fmtAccountTime=value=>{
     if(!value)return 'Never';
     const n=typeof value==='number'?value:Date.parse(value);
@@ -223,7 +234,7 @@
     const label=accountStatus==='syncing'?'Syncing…':accountStatus==='synced'?'Synced':accountStatus==='offline'?'Offline':accountStatus==='error'?'Sync issue':signedIn()?'Connected':'Local only';
     return `<article class="card flat account-card" id="tms60-account-card">
       <div class="account-head">
-        <div><h2>THIEPN Account &amp; sync</h2><p class="muted small-text">Optional account sync through the same THIEPN Account used by other apps. TMS60 remains fully usable offline without signing in.</p></div>
+        <div><h2>THIEPN Account &amp; sync</h2><p class="muted small-text">Optional account sync through the same THIEPN Account used by other apps. TMS60 remains fully usable offline without signing in. Cloud progress is isolated per Bible translation.</p></div>
         <span class="account-status ${statusClass}">${htmlEsc(label)}</span>
       </div>
       ${accountIdentityMarkup()}
@@ -235,15 +246,20 @@
       </div>
       <div class="account-actions">
         ${signedIn()
-          ? `<button class="btn primary" data-account-action="sync-now" ${!isOnline()?'disabled':''}>Sync now</button>
-             <button class="btn" data-account-action="create-backup" ${!isOnline()?'disabled':''}>Cloud backup</button>
-             <button class="btn" data-account-action="restore-backup" ${!isOnline()?'disabled':''}>Restore backup</button>
-             <button class="btn" data-account-action="sign-out">Sign out</button>
-             <button class="btn danger" data-account-action="confirm-delete-cloud" ${!isOnline()?'disabled':''}>Delete cloud data</button>`
+          ? accountMismatch
+            ? `<button class="btn primary" data-account-action="confirm-switch-account">Use this account for ${htmlEsc(TRANSLATION_ID)}</button>
+               <button class="btn" data-account-action="sign-out">Sign out</button>`
+            : `<button class="btn primary" data-account-action="sync-now" ${!isOnline()?'disabled':''}>Sync now</button>
+               <button class="btn" data-account-action="create-backup" ${!isOnline()?'disabled':''}>Cloud backup</button>
+               <button class="btn" data-account-action="restore-backup" ${!isOnline()?'disabled':''}>Restore backup</button>
+               <button class="btn" data-account-action="sign-out">Sign out</button>
+               <button class="btn danger" data-account-action="confirm-delete-cloud" ${!isOnline()?'disabled':''}>Delete cloud data</button>`
           : `<button class="btn primary" data-account-action="google-sign-in" ${!isOnline()?'disabled':''}>Continue with Google</button>`}
       </div>
-      <label class="switch-row account-switch"><span><strong>Automatic sync</strong><br><span class="tiny muted">After local progress is saved, synchronize it when signed in and online.</span></span><input type="checkbox" id="tms60-auto-sync" ${prefs.autoSync?'checked':''}></label>
-      <p class="account-note">Progress is always written locally first. TMS60 cloud rows are private to your account through Supabase Row Level Security. Signing out clears the shared THIEPN Account session on this browser origin but does not delete local progress.</p>
+      <label class="switch-row account-switch"><span><strong>Automatic sync</strong><br><span class="tiny muted">After local progress is saved, synchronize the active Bible version when signed in and online.</span></span><input type="checkbox" id="tms60-auto-sync" ${prefs.autoSync?'checked':''} ${accountMismatch?'disabled':''}></label>
+      <p class="account-note">${accountMismatch
+        ?'This Bible version has local progress linked to a different THIEPN Account. Cloud access is blocked to prevent cross-account data mixing. Use the explicit switch action if you intend to move this local version to the current account.'
+        :'Progress is always written locally first. TMS60 cloud rows are private to your account through Supabase Row Level Security. Signing out clears the shared THIEPN Account session on this browser origin but does not delete local progress.'}</p>
     </article>`;
   }
 
@@ -417,6 +433,12 @@
       if(manual)throw new Error('Sign in to your THIEPN Account before syncing.');
       return null;
     }
+    if(accountMismatch||!ensureAccountBinding()){
+      const message='This Bible version is linked to a different THIEPN Account. Use the explicit account-switch action before syncing.';
+      setAccountStatus('error',message);
+      if(manual)throw new Error(message);
+      return null;
+    }
     if(!isOnline()){
       pendingAutoSync=true;
       setAccountStatus('offline','Offline — local progress is safe and will sync later');
@@ -454,7 +476,7 @@
   }
 
   function queueAutoSync(){
-    if(!prefs.autoSync||!signedIn())return;
+    if(!prefs.autoSync||!signedIn()||accountMismatch)return;
     pendingAutoSync=true;
     clearTimeout(syncTimer);
     const elapsed=Date.now()-getLastSyncAt();
@@ -523,7 +545,6 @@
     if(hasActiveSession())throw new Error('End the active recall session before restoring cloud data.');
     const item=restoreBackups[Number(index)];
     if(!item)throw new Error('That cloud backup is no longer available.');
-    await createCloudBackup();
 
     const {data,error}=await client.from('tms60_backups')
       .select('id,translation_id,state_schema,state,created_at')
@@ -533,9 +554,14 @@
       .single();
     if(error)throw error;
     if(Number(data.state_schema)>SCHEMA||!completeStateShape(data.state))throw new Error('That backup is incompatible with this TMS60 version.');
+    const selectedState=sanitizeState(data.state);
+
+    // Fetch the selected backup before creating the safety backup: retention
+    // cleanup may otherwise delete the oldest selected backup.
+    await createCloudBackup();
 
     createRecoverySnapshot();
-    state=sanitizeState(data.state);
+    state=selectedState;
     setNewEpoch();
     state.meta.settingsChangedAt=state.meta.stateEpoch;
     if(!coreSave())throw new Error('The restored backup could not be stored locally.');
@@ -561,9 +587,13 @@
     const {error:stateError}=await client.from('tms60_sync_state').delete().eq('user_id',session.user.id);
     if(stateError)throw stateError;
     lastRemoteRevision=0;lastRemoteUpdatedAt='';
-    prefs.lastSyncAt=0;writePrefs();
-    setAccountStatus('synced','TMS60 cloud data deleted — local progress remains on this device');
-    toast('TMS60 cloud data deleted. Local progress was kept.');
+    prefs.lastSyncByTranslation={};
+    prefs.autoSync=false;
+    pendingAutoSync=false;
+    clearTimeout(syncTimer);syncTimer=0;
+    writePrefs();
+    setAccountStatus('synced','TMS60 cloud data deleted — automatic sync paused; local progress remains on this device');
+    toast('TMS60 cloud data deleted. Local progress was kept and automatic sync was turned off.');
   }
 
   async function signInGoogle(){
@@ -595,6 +625,7 @@
     const {error}=await client.auth.signOut({scope:'local'});
     if(error)throw error;
     session=null;
+    accountMismatch=false;
     lastRemoteRevision=0;lastRemoteUpdatedAt='';
     setAccountStatus('local','Signed out — local progress remains on this device');
   }
@@ -638,13 +669,19 @@
   async function activateSession(nextSession,{sync=true}={}){
     session=nextSession||null;
     if(!signedIn()){
+      accountMismatch=false;
       setAccountStatus('local','Local-only mode');
+      return;
+    }
+    if(!ensureAccountBinding()){
+      setAccountStatus('error','Different THIEPN Account detected. Cloud access is blocked for this Bible version until you explicitly switch its local binding.');
+      await markAppUsed();
       return;
     }
     setAccountStatus(isOnline()?'syncing':'offline',isOnline()?'THIEPN Account connected':'Signed in · offline');
     await markAppUsed();
-    if(sync&&isOnline()&&!hasActiveSession())await performSync().catch(()=>{});
-    else if(sync)pendingAutoSync=true;
+    if(sync&&prefs.autoSync&&isOnline()&&!hasActiveSession())await performSync().catch(()=>{});
+    else if(sync&&prefs.autoSync)pendingAutoSync=true;
   }
 
   async function bootstrapAuth(){
@@ -665,6 +702,7 @@
     if(event==='INITIAL_SESSION')return;
     session=nextSession||null;
     if(event==='SIGNED_OUT'){
+      accountMismatch=false;
       lastRemoteRevision=0;lastRemoteUpdatedAt='';
       setAccountStatus('local','Signed out — local progress remains on this device');
       return;
@@ -691,9 +729,29 @@
       else if(action==='restore-backup')await openRestoreBackups();
       else if(action==='restore-backup-file')await restoreBackup(button.dataset.backupIndex);
       else if(action==='sign-out')await signOut();
+      else if(action==='confirm-switch-account'){
+        modal(`<div class="modal-head"><h2>Switch this Bible version to the current account?</h2><button class="btn icon-btn" data-action="close-modal" aria-label="Close dialog">×</button></div>
+          <p>TMS60 will export the current <strong>${htmlEsc(TRANSLATION_ID)}</strong> local progress first, create a recovery snapshot, then clear this local version before loading the current THIEPN Account's cloud state. This prevents two accounts from being merged.</p>
+          <div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn danger" data-account-action="switch-account">Export &amp; switch</button></div>`);
+      }else if(action==='switch-account'){
+        if(hasActiveSession())throw new Error('End the active recall session before switching accounts.');
+        exportJSON();
+        createRecoverySnapshot();
+        storageWriteBlocked=false;storageBlockMessage='';
+        state=defaultState(0);
+        if(!coreSave())throw new Error('The new account state could not be stored locally.');
+        setBoundUser(session.user.id);
+        accountMismatch=false;
+        setLastSyncAt(0);
+        lastRemoteRevision=0;lastRemoteUpdatedAt='';
+        closeModal(false);
+        renderAll();
+        await performSync({manual:true});
+        toast('This Bible version is now linked to the current THIEPN Account.');
+      }
       else if(action==='confirm-delete-cloud'){
         modal(`<div class="modal-head"><h2>Delete TMS60 cloud data?</h2><button class="btn icon-btn" data-action="close-modal" aria-label="Close dialog">×</button></div>
-          <p>This removes TMS60 sync data and cloud backups from your THIEPN Account. <strong>Local progress on this device is kept.</strong></p>
+          <p>This removes <strong>all TMS60 Bible-version sync data and cloud backups</strong> from your THIEPN Account. Local progress on this device is kept, and automatic sync is turned off so the deleted cloud data is not recreated on reload.</p>
           <div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn danger" data-account-action="delete-cloud">Delete cloud data</button></div>`);
       }else if(action==='delete-cloud'){await deleteCloudData();closeModal(false)}
     }catch(error){
@@ -718,7 +776,7 @@
     if(event.target.id!=='tms60-auto-sync')return;
     prefs.autoSync=Boolean(event.target.checked);
     writePrefs();
-    if(prefs.autoSync)queueAutoSync();
+    if(prefs.autoSync&&!accountMismatch)queueAutoSync();
     refreshAccountPanel();
   });
 
