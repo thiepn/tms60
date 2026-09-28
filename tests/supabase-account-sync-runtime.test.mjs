@@ -57,7 +57,7 @@ function createFakeSupabase({db,sessionRef,clientOptionsRef,exchangeCalls,oauthS
       eq(column,value){filters.push(['eq',column,value]);return q},
       in(column,value){filters.push(['in',column,value]);if(op==='delete')return executeDelete();return q},
       order(column,{ascending=true}={}){orderSpec={column,ascending};return q},
-      limit(value){limitValue=value;return executeSelect()},
+      limit(value){limitValue=value;return q},
       insert(value){op='insert';payload=value;return q},
       update(value){op='update';payload=value;return q},
       delete(){op='delete';return q},
@@ -101,9 +101,35 @@ function createFakeSupabase({db,sessionRef,clientOptionsRef,exchangeCalls,oauthS
         return rows.length===1?{data:rows[0],error:null}:{data:null,error:{message:'row not found'}};
       },
       then(resolve,reject){
-        return Promise.resolve(op==='delete'?executeDelete():{data:executeSelect(),error:null}).then(resolve,reject);
+        const result=op==='delete'
+          ?executeDelete()
+          :op==='insert'
+            ?executeInsert()
+            :{data:executeSelect(),error:null};
+        return Promise.resolve(result).then(resolve,reject);
       }
     };
+
+    function executeInsert(){
+      if(table==='tms60_sync_state'){
+        const row=clone(payload);
+        const key=keyOf(row.user_id,row.translation_id);
+        if(db.sync.has(key))return {data:null,error:{code:'23505',status:409,message:'duplicate'}};
+        db.sync.set(key,row);
+        return {data:clone(row),error:null};
+      }
+      if(table==='tms60_backups'){
+        const rows=Array.isArray(payload)?payload:[payload];
+        const inserted=[];
+        for(const item of rows){
+          const row={...clone(item),id:item.id||`b${db.backups.length+1}`,created_at:item.created_at||new Date().toISOString()};
+          db.backups.push(row);
+          inserted.push(row);
+        }
+        return {data:clone(inserted),error:null};
+      }
+      return {data:null,error:null};
+    }
 
     function executeSelect(){
       let rows=rowsFor(table).filter(matches).map(clone);
@@ -456,7 +482,7 @@ test('restoring the oldest retained backup still works after safety-backup pruni
     user_id:'user-a',
     translation_id:'esv',
     state_schema:6,
-    state:makeState(index===6?'oldest':`backup-${index+1}`),
+    state:makeState(index===0?'oldest':`backup-${index+1}`),
     source_revision:index+1,
     created_at:new Date(Date.UTC(2026,8,28,20,0,index)).toISOString()
   }));
