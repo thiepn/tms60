@@ -11,6 +11,16 @@
   const AUTO_SYNC_DEBOUNCE_MS=4000;
   const AUTO_SYNC_MIN_INTERVAL_MS=15000;
   const MAX_SYNC_ATTEMPTS=4;
+  const MAX_CLOUD_STATE_BYTES=32*1024*1024;
+  const TRANSLATION_ID=Object.freeze({
+    'tms60-esv-memory-lab-v1':'esv',
+    'tms60-niv-memory-lab-v1':'niv',
+    'tms60-nlt-memory-lab-v1':'nlt',
+    'tms60-hfa-memory-lab-v1':'hfa',
+    'tms60-sch1951-memory-lab-v1':'schlachter1951',
+    'tms60-klb1985-memory-lab-v1':'klb1985',
+    'tms60-krv1961-memory-lab-v1':'krv1961'
+  })[KEY]||'esv';
 
   if(!window.supabase?.createClient){
     console.error('TMS60 account sync unavailable: Supabase client did not load.');
@@ -50,7 +60,9 @@
   };
   const prefs=readPrefs();
   if(typeof prefs.autoSync!=='boolean')prefs.autoSync=true;
-  if(!Number.isFinite(Number(prefs.lastSyncAt)))prefs.lastSyncAt=0;
+  if(!prefs.lastSyncByTranslation||typeof prefs.lastSyncByTranslation!=='object'||Array.isArray(prefs.lastSyncByTranslation))prefs.lastSyncByTranslation={};
+  if(Number.isFinite(Number(prefs.lastSyncAt))&&Number(prefs.lastSyncAt)>0&&!prefs.lastSyncByTranslation[TRANSLATION_ID])prefs.lastSyncByTranslation[TRANSLATION_ID]=Number(prefs.lastSyncAt);
+  delete prefs.lastSyncAt;
   if(!prefs.deviceId){
     prefs.deviceId=(crypto.randomUUID?.()||`device-${Date.now()}-${Math.random().toString(36).slice(2)}`).slice(0,120);
   }
@@ -59,6 +71,8 @@
 
   const isOnline=()=>navigator.onLine!==false;
   const signedIn=()=>Boolean(session?.user?.id);
+  const getLastSyncAt=()=>Math.max(0,Number(prefs.lastSyncByTranslation?.[TRANSLATION_ID])||0);
+  const setLastSyncAt=value=>{prefs.lastSyncByTranslation[TRANSLATION_ID]=Math.max(0,Number(value)||0);writePrefs()};
   const fmtAccountTime=value=>{
     if(!value)return 'Never';
     const n=typeof value==='number'?value:Date.parse(value);
@@ -124,7 +138,8 @@
       ${accountIdentityMarkup()}
       <div class="account-meta">
         <div><strong>Status:</strong> ${htmlEsc(accountMessage)}</div>
-        <div><strong>Last sync:</strong> ${htmlEsc(fmtAccountTime(Number(prefs.lastSyncAt)||0))}</div>
+        <div><strong>Bible version:</strong> ${htmlEsc(TRANSLATION_ID)}</div>
+        <div><strong>Last sync:</strong> ${htmlEsc(fmtAccountTime(getLastSyncAt()))}</div>
         ${lastRemoteRevision?`<div><strong>Cloud revision:</strong> ${lastRemoteRevision}${lastRemoteUpdatedAt?` · ${htmlEsc(fmtAccountTime(lastRemoteUpdatedAt))}`:''}</div>`:''}
       </div>
       <div class="account-actions">
@@ -152,6 +167,12 @@
   }
   function refreshAccountPanel(){
     if(document.getElementById('view-settings')?.classList.contains('active'))injectAccountPanel();
+  }
+
+  function assertCloudStateSize(json){
+    const bytes=new TextEncoder().encode(json).byteLength;
+    if(bytes>MAX_CLOUD_STATE_BYTES)throw new Error('TMS60 progress is too large for cloud sync. Export a local JSON backup and trim old review history before retrying.');
+    return bytes;
   }
 
   async function sha256(value){
@@ -187,8 +208,9 @@
   async function pullRemote(){
     if(!signedIn())throw new Error('Sign in before syncing.');
     const {data,error}=await client.from('tms60_sync_state')
-      .select('user_id,revision,state_schema,state,state_hash,client_updated_at,device_id,updated_at')
+      .select('user_id,translation_id,revision,state_schema,state,state_hash,client_updated_at,device_id,updated_at')
       .eq('user_id',session.user.id)
+      .eq('translation_id',TRANSLATION_ID)
       .maybeSingle();
     if(error)throw error;
     if(data){
@@ -207,6 +229,7 @@
     const json=JSON.stringify(clean);
     const payload={
       user_id:session.user.id,
+      translation_id:TRANSLATION_ID,
       revision:1,
       state_schema:SCHEMA,
       state:clean,
@@ -215,6 +238,7 @@
       device_id:prefs.deviceId,
       updated_at:new Date().toISOString()
     };
+    assertCloudStateSize(json);
     const {data,error}=await client.from('tms60_sync_state').insert(payload).select('revision,updated_at').single();
     if(error)throw error;
     lastRemoteRevision=Number(data.revision)||1;
@@ -234,9 +258,11 @@
       device_id:prefs.deviceId,
       updated_at:new Date().toISOString()
     };
+    assertCloudStateSize(json);
     const {data,error}=await client.from('tms60_sync_state')
       .update(payload)
       .eq('user_id',session.user.id)
+      .eq('translation_id',TRANSLATION_ID)
       .eq('revision',expectedRevision)
       .select('revision,updated_at')
       .maybeSingle();
@@ -325,9 +351,8 @@
       }
       if(!result)throw new Error('Another device kept changing cloud progress. No data was lost; retry sync.');
 
-      prefs.lastSyncAt=Date.now();
+      setLastSyncAt(Date.now());
       pendingAutoSync=false;
-      writePrefs();
       setAccountStatus('synced',result.changedLocal?'Synced — cloud progress merged safely':'Up to date');
       return result;
     })().catch(error=>{
@@ -341,7 +366,7 @@
     if(!prefs.autoSync||!signedIn())return;
     pendingAutoSync=true;
     clearTimeout(syncTimer);
-    const elapsed=Date.now()-(Number(prefs.lastSyncAt)||0);
+    const elapsed=Date.now()-getLastSyncAt();
     const delay=Math.max(AUTO_SYNC_DEBOUNCE_MS,AUTO_SYNC_MIN_INTERVAL_MS-elapsed);
     syncTimer=setTimeout(()=>{performSync().catch(()=>{})},delay);
   }
@@ -357,8 +382,10 @@
     setAccountStatus('syncing','Synchronizing before backup…');
     const syncResult=await performSync({manual:true});
     const clean=sanitizeState(state);
+    assertCloudStateSize(JSON.stringify(clean));
     const {error}=await client.from('tms60_backups').insert({
       user_id:session.user.id,
+      translation_id:TRANSLATION_ID,
       state_schema:SCHEMA,
       state:clean,
       source_revision:Number(syncResult?.revision||lastRemoteRevision||0),
@@ -369,6 +396,7 @@
     const {data:list,error:listError}=await client.from('tms60_backups')
       .select('id,created_at')
       .eq('user_id',session.user.id)
+      .eq('translation_id',TRANSLATION_ID)
       .order('created_at',{ascending:false})
       .limit(100);
     if(listError)throw listError;
@@ -385,8 +413,9 @@
     if(hasActiveSession())throw new Error('End the active recall session before restoring cloud data.');
     setAccountStatus('syncing','Loading cloud backups…');
     const {data,error}=await client.from('tms60_backups')
-      .select('id,created_at,source_revision,state_schema')
+      .select('id,created_at,source_revision,state_schema,translation_id')
       .eq('user_id',session.user.id)
+      .eq('translation_id',TRANSLATION_ID)
       .order('created_at',{ascending:false})
       .limit(MAX_BACKUPS);
     if(error)throw error;
@@ -406,8 +435,9 @@
     await createCloudBackup();
 
     const {data,error}=await client.from('tms60_backups')
-      .select('id,state_schema,state,created_at')
+      .select('id,translation_id,state_schema,state,created_at')
       .eq('user_id',session.user.id)
+      .eq('translation_id',TRANSLATION_ID)
       .eq('id',item.id)
       .single();
     if(error)throw error;
@@ -428,8 +458,7 @@
     }else{
       await insertRemote(state);
     }
-    prefs.lastSyncAt=Date.now();
-    writePrefs();
+    setLastSyncAt(Date.now());
     setAccountStatus('synced','Cloud backup restored and synchronized');
     toast('Cloud backup restored.');
   }
