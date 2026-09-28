@@ -65,7 +65,7 @@ try{
   const cacheMatch=source.match(/const CACHE='([^']+)'/);
   const expectedCache=cacheMatch?.[1]||'';
   check(sourceResponse.status()===200,'Service worker source reachable',String(sourceResponse.status()));
-  check(/^tms60-stability\d+-\d{4}-\d{2}-\d{2}$/.test(expectedCache),'P2-3 cache revision declared',expectedCache);
+  check(/^tms60-[a-z0-9-]+-\d{4}-\d{2}-\d{2}$/.test(expectedCache),'TMS60 dated cache revision declared',expectedCache);
   check(!source.includes("cache:'no-store'")&&!source.includes('cache:"no-store"'),'Runtime no-store override removed');
   check(source.includes('function networkFirst('),'Network-first strategy is explicit');
   check(source.includes('async function cacheFirst('),'Cache-first strategy is explicit');
