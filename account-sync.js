@@ -889,19 +889,59 @@
           <div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn danger" data-account-action="switch-account">Export &amp; switch</button></div>`);
       }else if(action==='switch-account'){
         if(hasActiveSession())throw new Error('End the active recall session before switching accounts.');
-        if(!writePrefs())throw new Error('Browser storage cannot safely save the account switch. Free site storage or allow site data, then retry.');
+        const userId=session?.user?.id;
+        const epoch=authEpoch;
+        if(!userId)throw new Error('Sign in before switching the local account binding.');
+
+        const previousAutoSync=prefs.autoSync;
+        const previousState=sanitizeState(state);
+        prefs.autoSync=false;
+        prefs.rebindRequired=true;
+        pendingAutoSync=false;
+        clearTimeout(syncTimer);syncTimer=0;
+        if(!writePrefs())throw new Error('Browser storage cannot safely guard the account switch. Free site storage or allow site data, then retry.');
+
         exportJSON();
+        const remote=await pullRemote(userId);
+        if(authEpoch!==epoch||session?.user?.id!==userId)throw Object.assign(new Error('THIEPN Account changed while preparing the account switch.'),{code:'account_changed'});
+        const incoming=remote?validateRemoteState(remote):defaultState(0);
+
         createRecoverySnapshot();
         storageWriteBlocked=false;storageBlockMessage='';
-        state=defaultState(0);
-        if(!coreSave())throw new Error('The new account state could not be stored locally.');
-        if(!setBoundUser(session.user.id))throw new Error('The account binding could not be saved. Your exported backup is safe; cloud sync remains blocked.');
+        state=sanitizeState(incoming);
+        setNewEpoch();
+        state.meta.settingsChangedAt=state.meta.stateEpoch;
+        if(!coreSave()){
+          state=previousState;
+          coreSave();
+          throw new Error('The new account state could not be stored locally. The old account binding remains protected.');
+        }
+
+        if(!setBoundUser(userId)){
+          state=previousState;
+          coreSave();
+          accountMismatch=true;
+          throw new Error('The new account binding could not be saved. Your exported backup is safe and cloud sync remains blocked.');
+        }
+
         accountMismatch=false;
-        setLastSyncAt(0);
-        lastRemoteRevision=0;lastRemoteUpdatedAt='';
+        lastRemoteRevision=Number(remote?.revision)||0;
+        lastRemoteUpdatedAt=remote?.updated_at||'';
+        setLastSyncAt(remote?Date.now():0);
+
+        if(remote){
+          const pushed=await updateRemoteCas(Number(remote.revision)||1,state,userId);
+          if(pushed==null)await performSync({manual:true});
+        }else{
+          await insertRemote(state,userId);
+        }
+        if(authEpoch!==epoch||session?.user?.id!==userId)throw Object.assign(new Error('THIEPN Account changed while completing the account switch.'),{code:'account_changed'});
+
+        prefs.autoSync=previousAutoSync;
+        if(!writePrefs())prefs.autoSync=false;
         closeModal(false);
         renderAll();
-        await performSync({manual:true});
+        setAccountStatus('synced','This Bible version is linked to the current THIEPN Account');
         toast('This Bible version is now linked to the current THIEPN Account.');
       }
       else if(action==='confirm-delete-cloud'){
