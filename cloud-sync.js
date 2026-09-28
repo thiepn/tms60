@@ -374,7 +374,9 @@
   async function connectGoogle(){
     if(!online())throw new Error('Connect to the internet before signing in with Google.');
     setCloudStatus('syncing','Opening Google authorization…');
-    await requestToken('consent');
+    // After a reload, first try the normal token flow without forcing the
+    // consent screen again. A first-time connection still requests consent.
+    await requestToken(prefs.wasConnected?'':'consent');
     prefs.wasConnected=true;writePrefs();
     await fetchProfile();
     setCloudStatus('syncing','Checking cloud progress…');
@@ -383,9 +385,9 @@
 
   function disconnectGoogle(){
     clearTimeout(syncTimer);syncTimer=0;pendingAutoSync=false;
-    const access=token;
+    // Signing out of TMS60 forgets only this in-memory access token. It does
+    // not revoke the user's Google grant; reconnecting later stays low-friction.
     token=null;tokenExpiresAt=0;profile=null;lastRemoteModified='';
-    if(access&&window.google?.accounts?.oauth2?.revoke){try{google.accounts.oauth2.revoke(access,()=>{})}catch(_){}}
     prefs.wasConnected=false;writePrefs();
     setCloudStatus('disconnected','Signed out — local progress remains on this device');
   }
