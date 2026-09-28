@@ -172,11 +172,12 @@ function createRuntime({
   key='tms60-esv-memory-lab-v1',
   href='https://thiepn.dev/tms60/',
   initialLocal={},
+  initialSession={},
   session=null,
   db={sync:new Map(),backups:[],apps:[]}
 }={}){
   const localStorage=storage(initialLocal);
-  const sessionStorage=storage();
+  const sessionStorage=storage(initialSession);
   const listeners=new Map();
   const exchangeCalls=[];
   const oauthStarts=[];
@@ -415,4 +416,33 @@ test('full local reset pauses sync before the shell can reload cloud data',async
 
   const saved=JSON.parse(runtime.localStorage.getItem('tms60-account-sync-prefs-v1'));
   assert.equal(saved.autoSync,false);
+});
+
+
+test('mismatched OAuth flow id is rejected before code exchange',async()=>{
+  const prefs=JSON.stringify({autoSync:false,deviceId:'device-test',lastSyncByTranslation:{},boundUserByTranslation:{}});
+  const runtime=createRuntime({
+    href:'https://thiepn.dev/tms60/?tms60_auth=1&code=good&sb_flow_id=flow-callback',
+    initialLocal:{'tms60-account-sync-prefs-v1':prefs},
+    initialSession:{'tms60-pkce-flow-v1':'different-flow'}
+  });
+  await wait(30);
+  assert.equal(runtime.exchangeCalls.length,0);
+  assert.equal(runtime.replaced.length,1);
+});
+
+test('unknown future translation keys derive an isolated cloud id instead of falling back to ESV',async()=>{
+  const db={sync:new Map(),backups:[],apps:[]};
+  const session={user:{id:'user-a',email:'a@example.test'},access_token:'a',refresh_token:'r',expires_at:9999999999};
+  const prefs=JSON.stringify({autoSync:false,deviceId:'device-test',lastSyncByTranslation:{},boundUserByTranslation:{}});
+  const runtime=createRuntime({
+    key:'tms60-futurex-memory-lab-v1',
+    initialLocal:{'tms60-account-sync-prefs-v1':prefs},
+    session,
+    db
+  });
+  await wait();
+  await runtime.context.TMS60Account.sync();
+  assert.ok(db.sync.has('user-a|futurex'));
+  assert.equal(db.sync.has('user-a|esv'),false);
 });
