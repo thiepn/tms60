@@ -625,13 +625,15 @@
     renderAll();
     closeModal(false);
 
-    const remote=await pullRemote();
+    const remote=await pullRemote(userId);
+    if(authEpoch!==epoch||session?.user?.id!==userId)throw Object.assign(new Error('THIEPN Account changed while restored progress was being synchronized.'),{code:'account_changed'});
     if(remote){
-      const pushed=await updateRemoteCas(Number(remote.revision)||1,state);
+      const pushed=await updateRemoteCas(Number(remote.revision)||1,state,userId);
       if(pushed==null)await performSync({manual:true});
     }else{
-      await insertRemote(state);
+      await insertRemote(state,userId);
     }
+    if(authEpoch!==epoch||session?.user?.id!==userId)throw Object.assign(new Error('THIEPN Account changed while restored progress was being synchronized.'),{code:'account_changed'});
     setLastSyncAt(Date.now());
     setAccountStatus('synced','Cloud backup restored and synchronized');
     toast('Cloud backup restored.');
