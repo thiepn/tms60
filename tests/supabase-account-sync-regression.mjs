@@ -28,7 +28,7 @@ pass(account.includes("persistSession:true")&&account.includes("autoRefreshToken
 pass(account.includes("exchangeCodeForSession(code,flowId?{flowId}:undefined)"),'Top-level OAuth callback binds the explicit PKCE flow ID');
 pass(account.includes("PKCE_BACKUP_KEY")&&account.includes("authStorage"),'PKCE verifier has a tab-scoped recovery mirror');
 pass(account.includes("'sb_flow_id'"),'OAuth callback preserves and cleans the Supabase flow ID');
-pass(account.includes("AbortSignal.timeout(15000)"),'Account network requests are time-bounded');
+pass(account.includes("signalApi.timeout(15000)")&&account.includes("globalThis.AbortSignal"),'Account network requests are time-bounded');
 pass(account.includes("accountErrorMessage"),'Account failures are mapped to actionable user-facing errors');
 pass(account.includes("window.top")||account.includes('topWindow'),'Iframe shell OAuth bridges to top-level navigation');
 
