@@ -685,15 +685,19 @@
     const userId=session?.user?.id;
     const epoch=authEpoch;
     if(!userId)throw new Error('Sign in before deleting TMS60 cloud data.');
+
+    // Persist the no-resurrection guard before deleting anything remotely.
+    // If browser storage cannot retain it, leave cloud data untouched.
+    prefs.autoSync=false;
+    prefs.lastSyncByTranslation={};
+    pendingAutoSync=false;
+    clearTimeout(syncTimer);syncTimer=0;
+    if(!writePrefs())throw new Error('Cloud data was not deleted because TMS60 could not safely persist the sync-off guard in browser storage.');
+
     const {error}=await client.rpc('delete_tms60_cloud_data',{p_expected_user_id:userId});
     if(error)throw error;
     if(authEpoch!==epoch||session?.user?.id!==userId)throw Object.assign(new Error('THIEPN Account changed while cloud data was being deleted.'),{code:'account_changed'});
     lastRemoteRevision=0;lastRemoteUpdatedAt='';
-    prefs.lastSyncByTranslation={};
-    prefs.autoSync=false;
-    pendingAutoSync=false;
-    clearTimeout(syncTimer);syncTimer=0;
-    writePrefs();
     setAccountStatus('synced','TMS60 cloud data deleted — automatic sync paused; local progress remains on this device');
     toast('TMS60 cloud data deleted. Local progress was kept and automatic sync was turned off.');
   }
@@ -880,10 +884,17 @@
     // "Reset everything" is explicitly a local reset and the top-level shell
     // reloads almost immediately. Pause sync first so cloud state cannot
     // repopulate the freshly-reset browser before the user chooses to sync.
+    const previousAutoSync=prefs.autoSync;
     prefs.autoSync=false;
     pendingAutoSync=false;
     clearTimeout(syncTimer);syncTimer=0;
-    writePrefs();
+    if(!writePrefs()){
+      prefs.autoSync=previousAutoSync;
+      event.preventDefault();
+      event.stopImmediatePropagation?.();
+      toast('Reset cancelled because TMS60 could not safely save the cloud-sync pause. Free site storage or allow site data, then retry.','error');
+      return;
+    }
     setAccountStatus('local','Local reset requested — automatic sync paused; cloud recovery data was kept');
   },true);
 
@@ -897,12 +908,19 @@
 
   document.addEventListener('change',event=>{
     if(event.target.id!=='tms60-auto-sync')return;
+    const previous=prefs.autoSync;
     prefs.autoSync=Boolean(event.target.checked);
+    if(!writePrefs()){
+      prefs.autoSync=previous;
+      event.target.checked=previous;
+      toast('Automatic sync setting was not changed because browser storage is unavailable.','error');
+      refreshAccountPanel();
+      return;
+    }
     if(!prefs.autoSync){
       pendingAutoSync=false;
       clearTimeout(syncTimer);syncTimer=0;
     }
-    writePrefs();
     if(prefs.autoSync&&!accountMismatch)queueAutoSync();
     refreshAccountPanel();
   });
