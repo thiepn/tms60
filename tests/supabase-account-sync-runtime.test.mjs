@@ -282,7 +282,19 @@ function createRuntime({
     return button;
   }
 
-  return {context,db,localStorage,sessionStorage,sessionRef,clientOptionsRef,exchangeCalls,oauthStarts,assigned,replaced,dispatchClick};
+  async function dispatchResetAll(){
+    const button={dataset:{action:'reset-all'},disabled:false};
+    const event={
+      target:{closest:selector=>selector==='[data-action="reset-all"]'?button:null},
+      preventDefault(){},
+      stopPropagation(){}
+    };
+    for(const callback of listeners.get('click')||[])callback(event);
+    await wait(10);
+    return button;
+  }
+
+  return {context,db,localStorage,sessionStorage,sessionRef,clientOptionsRef,exchangeCalls,oauthStarts,assigned,replaced,dispatchClick,dispatchResetAll};
 }
 
 test('PKCE callback uses explicit flow id across the srcdoc iframe boundary',async()=>{
@@ -385,4 +397,22 @@ test('delete cloud data is identity-bound and remains deleted after reload',asyn
   await wait(40);
   assert.equal(db.sync.size,0,'reload must not silently recreate deleted cloud state');
   assert.equal(reload.context.TMS60Account.signedIn(),true);
+});
+
+
+test('full local reset pauses sync before the shell can reload cloud data',async()=>{
+  const db={sync:new Map(),backups:[],apps:[]};
+  const session={user:{id:'user-a',email:'a@example.test'},access_token:'a',refresh_token:'r',expires_at:9999999999};
+  const prefs=JSON.stringify({
+    autoSync:true,
+    deviceId:'device-test',
+    lastSyncByTranslation:{},
+    boundUserByTranslation:{esv:'user-a'}
+  });
+  const runtime=createRuntime({initialLocal:{'tms60-account-sync-prefs-v1':prefs},session,db});
+  await wait(35);
+  await runtime.dispatchResetAll();
+
+  const saved=JSON.parse(runtime.localStorage.getItem('tms60-account-sync-prefs-v1'));
+  assert.equal(saved.autoSync,false);
 });
