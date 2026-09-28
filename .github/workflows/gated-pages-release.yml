@@ -75,6 +75,7 @@ jobs:
             tests/p2-ui-defaults-regression.mjs
             tests/typo-tolerance-regression.mjs
             tests/rc1-bible-gate.mjs
+            tests/pwa-install-metadata-regression.mjs
           )
 
           if grep -n 'https://thiepn.github.io/tms60/' "${GATED_TESTS[@]}"; then
@@ -106,6 +107,7 @@ jobs:
             tests/p2-ui-defaults-regression.mjs
             tests/typo-tolerance-regression.mjs
             tests/rc1-bible-gate.mjs
+            tests/pwa-install-metadata-regression.mjs
           )
 
           for test_file in "${GATED_TESTS[@]}"; do
