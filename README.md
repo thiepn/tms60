@@ -8,7 +8,7 @@
 
 <br><br>
 
-<img src="https://readme-typing-svg.demolab.com?font=Georgia&weight=600&size=24&duration=2800&pause=900&color=16A34A&center=true&vCenter=true&width=760&lines=Memorize+all+60+TMS+verses.;Practice+exact+word-for-word+recall.;Build+durable+long-term+memory.;Fully+offline.+Private.+No+account." alt="Animated project description">
+<img src="https://readme-typing-svg.demolab.com?font=Georgia&weight=600&size=24&duration=2800&pause=900&color=16A34A&center=true&vCenter=true&width=760&lines=Memorize+all+60+TMS+verses.;Practice+exact+word-for-word+recall.;Build+durable+long-term+memory.;Offline-first.+Private.+Account+optional." alt="Animated project description">
 
 <br>
 
@@ -43,7 +43,7 @@ It guides each verse through a structured progression:
 | First letters | Fixed-size study sessions | Keyboard and touch support |
 | Flashcards | Weak-word diagnostics | Light/dark mode |
 | Reference recall | Pack assessments | 8 accent colors |
-| Phrase build-up | Placement testing | Import/export backups |
+| Phrase build-up | Placement testing | Local + optional Google cloud backups |
 | Listen and repeat | Detailed review history | Print-friendly library |
 
 ## Start memorizing
@@ -66,11 +66,22 @@ It guides each verse through a structured progression:
 3. Start studying
 ```
 
-Your progress stays in your browser. Use the built-in **Export Progress** option to keep backups.
+Your progress starts and remains usable locally. Use **Export Progress** for portable JSON backups, or optionally connect Google in Settings for cross-device sync and private cloud recovery points.
+
+## Optional Google sync
+
+TMS60 does not require an account. When Google sync is configured, users can opt in to:
+
+- sign in with Google OAuth;
+- synchronize TMS60 progress across devices;
+- create and restore private cloud backups;
+- keep studying offline and sync again when connectivity returns.
+
+Cloud data is stored in the app's hidden Google Drive `appDataFolder`; TMS60 does not request access to ordinary Drive files. See [GOOGLE_SYNC_SETUP.md](GOOGLE_SYNC_SETUP.md) for the one-time Google Cloud configuration.
 
 ## Built for focused memorization
 
-No login. No advertisements. No cloud dependency. No distractions.
+No login required. No advertisements. No cloud dependency for normal study. No distractions.
 
 Just the text, deliberate recall, intelligent review, and steady progress through all 60 verses.
 
