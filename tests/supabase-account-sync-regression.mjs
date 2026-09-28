@@ -9,6 +9,7 @@ const migration=read('supabase/migrations/20260928194925_tms60_account_sync.sql'
 const translationMigration=read('supabase/migrations/20260928203152_tms60_translation_isolation_hardening.sql');
 const deleteMigration=read('supabase/migrations/20260928203953_tms60_atomic_cloud_delete.sql');
 const deleteGuardMigration=read('supabase/migrations/20260928204241_tms60_cloud_delete_identity_guard.sql');
+const indexCleanupMigration=read('supabase/migrations/20260928205024_tms60_remove_redundant_sync_indexes.sql');
 
 const failures=[];
 const pass=(ok,name,detail='')=>{
@@ -64,6 +65,7 @@ pass(translationMigration.includes('33554432'),'Database payload ceiling matches
 pass(deleteMigration.includes('security invoker'),'Cloud deletion RPC preserves RLS/security-invoker semantics');
 pass(deleteGuardMigration.includes('p_expected_user_id')&&deleteGuardMigration.includes('p_expected_user_id <> v_user_id'),'Destructive RPC rejects a mid-flight account identity mismatch');
 pass(deleteGuardMigration.includes('revoke all')&&deleteGuardMigration.includes('grant execute')&&deleteGuardMigration.includes('authenticated'),'Destructive RPC has an explicit authenticated-only execute grant');
+pass(indexCleanupMigration.includes('drop index if exists public.tms60_sync_state_updated_at_idx'),'Redundant sync-state write-cost index is removed');
 
 const vendorIndex=app.indexOf('<script src="./vendor/supabase-2.116.0.js"></script>');
 const accountIndex=app.indexOf('<script src="./account-sync.js"></script>');
