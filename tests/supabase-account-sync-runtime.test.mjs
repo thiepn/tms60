@@ -7,12 +7,18 @@ const source=fs.readFileSync(new URL('../account-sync.js',import.meta.url),'utf8
 const wait=(ms=15)=>new Promise(resolve=>setTimeout(resolve,ms));
 const clone=value=>JSON.parse(JSON.stringify(value));
 
-function storage(initial={}){
+function storage(initial={},options={}){
   const map=new Map(Object.entries(initial));
+  const failSetKeys=new Set(options.failSetKeys||[]);
   return {
     getItem:key=>map.has(String(key))?map.get(String(key)):null,
-    setItem:(key,value)=>map.set(String(key),String(value)),
+    setItem(key,value){
+      if(failSetKeys.has(String(key)))throw Object.assign(new Error('quota'),{name:'QuotaExceededError'});
+      map.set(String(key),String(value));
+    },
     removeItem:key=>map.delete(String(key)),
+    failSet:key=>failSetKeys.add(String(key)),
+    allowSet:key=>failSetKeys.delete(String(key)),
     dump:()=>Object.fromEntries(map)
   };
 }
@@ -32,7 +38,7 @@ function makeState(marker='local',epoch=1){
 
 function keyOf(userId,translationId){return `${userId}|${translationId}`}
 
-function createFakeSupabase({db,sessionRef,clientOptionsRef,exchangeCalls,oauthStarts}){
+function createFakeSupabase({db,sessionRef,clientOptionsRef,exchangeCalls,oauthStarts,rpcCalls}){
   function rowsFor(table){
     if(table==='tms60_sync_state')return [...db.sync.values()];
     if(table==='tms60_backups')return db.backups;
@@ -180,6 +186,7 @@ function createFakeSupabase({db,sessionRef,clientOptionsRef,exchangeCalls,oauthS
         },
         from:query,
         async rpc(name,args){
+          rpcCalls.push({name,args:clone(args||{})});
           if(name!=='delete_tms60_cloud_data')return {data:null,error:{message:'unknown rpc'}};
           const current=sessionRef.value?.user?.id||null;
           if(!current||args?.p_expected_user_id!==current)return {data:null,error:{status:403,code:'42501',message:'account changed before deletion'}};
@@ -199,14 +206,16 @@ function createRuntime({
   href='https://thiepn.dev/tms60/',
   initialLocal={},
   initialSession={},
+  failLocalSetKeys=[],
   session=null,
   db={sync:new Map(),backups:[],apps:[]}
 }={}){
-  const localStorage=storage(initialLocal);
+  const localStorage=storage(initialLocal,{failSetKeys:failLocalSetKeys});
   const sessionStorage=storage(initialSession);
   const listeners=new Map();
   const exchangeCalls=[];
   const oauthStarts=[];
+  const rpcCalls=[];
   const sessionRef={value:session};
   const clientOptionsRef={value:null};
   const assigned=[];
@@ -292,7 +301,7 @@ function createRuntime({
   };
   context.window=context;
   context.top=topWindow;
-  context.supabase=createFakeSupabase({db,sessionRef,clientOptionsRef,exchangeCalls,oauthStarts});
+  context.supabase=createFakeSupabase({db,sessionRef,clientOptionsRef,exchangeCalls,oauthStarts,rpcCalls});
 
   vm.createContext(context);
   vm.runInContext(source,context,{filename:'account-sync.js'});
@@ -311,17 +320,19 @@ function createRuntime({
 
   async function dispatchResetAll(){
     const button={dataset:{action:'reset-all'},disabled:false};
+    const flags={prevented:false,immediateStopped:false};
     const event={
       target:{closest:selector=>selector==='[data-action="reset-all"]'?button:null},
-      preventDefault(){},
-      stopPropagation(){}
+      preventDefault(){flags.prevented=true},
+      stopPropagation(){},
+      stopImmediatePropagation(){flags.immediateStopped=true}
     };
     for(const callback of listeners.get('click')||[])callback(event);
     await wait(10);
-    return button;
+    return {button,...flags};
   }
 
-  return {context,db,localStorage,sessionStorage,sessionRef,clientOptionsRef,exchangeCalls,oauthStarts,assigned,replaced,dispatchClick,dispatchResetAll};
+  return {context,db,localStorage,sessionStorage,sessionRef,clientOptionsRef,exchangeCalls,oauthStarts,rpcCalls,assigned,replaced,dispatchClick,dispatchResetAll};
 }
 
 test('PKCE callback uses explicit flow id across the srcdoc iframe boundary',async()=>{
@@ -358,7 +369,7 @@ test('same account stores independent ESV and NIV cloud states',async()=>{
   const db={sync:new Map(),backups:[],apps:[]};
   const shared=storage();
   const session={user:{id:'user-a',email:'a@example.test'},access_token:'a',refresh_token:'r',expires_at:9999999999};
-  const prefs=JSON.stringify({autoSync:false,deviceId:'device-test',lastSyncByTranslation:{},boundUserByTranslation:{}});
+  const prefs=JSON.stringify({autoSync:false,deviceId:'device-test',lastSyncByTranslation:{},boundUserByTranslation:{esv:'user-a',niv:'user-a'}});
 
   const esv=createRuntime({key:'tms60-esv-memory-lab-v1',initialLocal:{'tms60-account-sync-prefs-v1':prefs},session,db});
   await wait();
@@ -460,7 +471,7 @@ test('mismatched OAuth flow id is rejected before code exchange',async()=>{
 test('unknown future translation keys derive an isolated cloud id instead of falling back to ESV',async()=>{
   const db={sync:new Map(),backups:[],apps:[]};
   const session={user:{id:'user-a',email:'a@example.test'},access_token:'a',refresh_token:'r',expires_at:9999999999};
-  const prefs=JSON.stringify({autoSync:false,deviceId:'device-test',lastSyncByTranslation:{},boundUserByTranslation:{}});
+  const prefs=JSON.stringify({autoSync:false,deviceId:'device-test',lastSyncByTranslation:{},boundUserByTranslation:{futurex:'user-a'}});
   const runtime=createRuntime({
     key:'tms60-futurex-memory-lab-v1',
     initialLocal:{'tms60-account-sync-prefs-v1':prefs},
@@ -508,4 +519,63 @@ test('restoring the oldest retained backup still works after safety-backup pruni
   assert.equal(runtime.context.state.marker,'oldest');
   assert.equal(db.sync.get('user-a|esv')?.state?.marker,'oldest');
   assert.ok(db.backups.length<=7);
+});
+
+
+test('existing unbound local progress never auto-uploads to an already shared THIEPN session',async()=>{
+  const db={sync:new Map(),backups:[],apps:[]};
+  const session={user:{id:'user-a',email:'a@example.test'},access_token:'a',refresh_token:'r',expires_at:9999999999};
+  const prefs=JSON.stringify({autoSync:true,deviceId:'device-test',lastSyncByTranslation:{},boundUserByTranslation:{}});
+  const runtime=createRuntime({initialLocal:{'tms60-account-sync-prefs-v1':prefs},session,db});
+  await wait(50);
+
+  assert.equal(db.sync.size,0,'existing local progress must wait for explicit account linking');
+  await assert.rejects(()=>runtime.context.TMS60Account.sync(),/Existing local progress has not been linked/i);
+
+  await runtime.dispatchClick('link-account');
+  await wait(60);
+  assert.ok(db.sync.has('user-a|esv'),'explicit link may then sync local progress');
+});
+
+test('cloud deletion is blocked before RPC if sync-off safety preferences cannot persist',async()=>{
+  const state=makeState('remote');
+  const db={
+    sync:new Map([['user-a|esv',{user_id:'user-a',translation_id:'esv',revision:1,state_schema:6,state:clone(state),updated_at:'2026-09-28T20:00:00Z'}]]),
+    backups:[{id:'b1',user_id:'user-a',translation_id:'esv',state_schema:6,state:clone(state),created_at:'2026-09-28T20:00:00Z'}],
+    apps:[]
+  };
+  const session={user:{id:'user-a',email:'a@example.test'},access_token:'a',refresh_token:'r',expires_at:9999999999};
+  const prefKey='tms60-account-sync-prefs-v1';
+  const prefs=JSON.stringify({autoSync:true,deviceId:'device-test',lastSyncByTranslation:{},boundUserByTranslation:{esv:'user-a'}});
+  const runtime=createRuntime({
+    initialLocal:{[prefKey]:prefs},
+    failLocalSetKeys:[prefKey],
+    session,
+    db
+  });
+  await wait(30);
+  await runtime.dispatchClick('delete-cloud');
+  await wait(30);
+
+  assert.equal(runtime.rpcCalls.length,0,'destructive RPC must not run without durable no-resurrection guard');
+  assert.equal(db.sync.size,1);
+  assert.equal(db.backups.length,1);
+});
+
+test('full local reset is cancelled if the cloud-sync pause cannot be persisted',async()=>{
+  const db={sync:new Map(),backups:[],apps:[]};
+  const session={user:{id:'user-a',email:'a@example.test'},access_token:'a',refresh_token:'r',expires_at:9999999999};
+  const prefKey='tms60-account-sync-prefs-v1';
+  const prefs=JSON.stringify({autoSync:true,deviceId:'device-test',lastSyncByTranslation:{},boundUserByTranslation:{esv:'user-a'}});
+  const runtime=createRuntime({
+    initialLocal:{[prefKey]:prefs},
+    failLocalSetKeys:[prefKey],
+    session,
+    db
+  });
+  await wait(30);
+  const result=await runtime.dispatchResetAll();
+
+  assert.equal(result.prevented,true);
+  assert.equal(result.immediateStopped,true);
 });
