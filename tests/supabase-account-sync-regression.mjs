@@ -47,6 +47,11 @@ pass(account.includes('boundUserByTranslation')&&account.includes('accountMismat
 pass(account.includes("code:'account_changed'")&&account.includes('authEpoch'),'In-flight operations are invalidated when the shared account identity changes');
 pass(account.includes("client.rpc('delete_tms60_cloud_data',{p_expected_user_id:userId})"),'Cloud deletion is atomic and bound to the initiating account');
 pass(account.includes('prefs.autoSync=false'),'Deleting cloud data pauses auto-sync so deleted data is not recreated');
+pass(account.includes("localStorage.getItem(PREF_KEY)!==text"),'Account safety preferences are read-back verified after writes');
+pass(account.includes("prefsWritable")&&account.includes("rebindRequired"),'Account sync fails closed on unavailable or corrupted safety preferences');
+pass(account.indexOf("if(!writePrefs())throw new Error('Cloud data was not deleted")<account.indexOf("client.rpc('delete_tms60_cloud_data'"),'No-resurrection guard is persisted before destructive cloud deletion');
+pass(account.includes("Reset cancelled because TMS60 could not safely save the cloud-sync pause"),'Full local reset is cancelled when sync pause cannot be persisted');
+pass(account.includes("Existing local progress has not been linked to a THIEPN Account yet"),'Existing pre-account local progress requires explicit first account linking');
 pass(account.indexOf('const selectedState=sanitizeState(data.state)')<account.indexOf('await createCloudBackup();'),'Selected restore data is fetched before retention can prune the oldest backup');
 pass(account.includes('const coreSave=save;')&&account.includes('save=function()'),'Local-first save remains the primary write path');
 
