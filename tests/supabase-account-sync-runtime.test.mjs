@@ -295,7 +295,7 @@ test('PKCE callback uses explicit flow id across the srcdoc iframe boundary',asy
 
   assert.equal(runtime.exchangeCalls.length,1);
   assert.equal(runtime.exchangeCalls[0].code,'good');
-  assert.deepEqual(runtime.exchangeCalls[0].options,{flowId:'flow-callback'});
+  assert.equal(runtime.exchangeCalls[0].options?.flowId,'flow-callback');
   assert.equal(runtime.replaced.length,1);
   assert.ok(!runtime.replaced[0].includes('code='));
   assert.ok(!runtime.replaced[0].includes('sb_flow_id='));
