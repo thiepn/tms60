@@ -9,7 +9,11 @@ on:
       - 'vendor/LICENSE.supabase'
       - 'sw.js'
       - 'supabase/migrations/20260928194925_tms60_account_sync.sql'
+      - 'supabase/migrations/20260928203152_tms60_translation_isolation_hardening.sql'
+      - 'supabase/migrations/20260928203953_tms60_atomic_cloud_delete.sql'
+      - 'supabase/migrations/20260928204241_tms60_cloud_delete_identity_guard.sql'
       - 'tests/supabase-account-sync-regression.mjs'
+      - 'tests/supabase-account-sync-runtime.test.mjs'
       - '.github/workflows/supabase-account-sync-regression.yml'
   push:
     branches: [main]
@@ -20,7 +24,11 @@ on:
       - 'vendor/LICENSE.supabase'
       - 'sw.js'
       - 'supabase/migrations/20260928194925_tms60_account_sync.sql'
+      - 'supabase/migrations/20260928203152_tms60_translation_isolation_hardening.sql'
+      - 'supabase/migrations/20260928203953_tms60_atomic_cloud_delete.sql'
+      - 'supabase/migrations/20260928204241_tms60_cloud_delete_identity_guard.sql'
       - 'tests/supabase-account-sync-regression.mjs'
+      - 'tests/supabase-account-sync-runtime.test.mjs'
       - '.github/workflows/supabase-account-sync-regression.yml'
   workflow_dispatch:
 
@@ -38,3 +46,5 @@ jobs:
           node-version: '22'
       - name: Verify shared account, sync, backup, and RLS contracts
         run: node tests/supabase-account-sync-regression.mjs
+      - name: Exercise account runtime failure paths
+        run: node --test tests/supabase-account-sync-runtime.test.mjs
