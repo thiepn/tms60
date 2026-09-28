@@ -15,6 +15,7 @@ on:
       - 'supabase/migrations/20260928205024_tms60_remove_redundant_sync_indexes.sql'
       - 'tests/supabase-account-sync-regression.mjs'
       - 'tests/supabase-account-sync-runtime.test.mjs'
+      - 'scripts/tms60-auth-diagnostic.mjs'
       - '.github/workflows/supabase-account-sync-regression.yml'
   push:
     branches: [main]
@@ -31,6 +32,7 @@ on:
       - 'supabase/migrations/20260928205024_tms60_remove_redundant_sync_indexes.sql'
       - 'tests/supabase-account-sync-regression.mjs'
       - 'tests/supabase-account-sync-runtime.test.mjs'
+      - 'scripts/tms60-auth-diagnostic.mjs'
       - '.github/workflows/supabase-account-sync-regression.yml'
   workflow_dispatch:
 
@@ -50,3 +52,5 @@ jobs:
         run: node tests/supabase-account-sync-regression.mjs
       - name: Exercise account runtime failure paths
         run: node --test tests/supabase-account-sync-runtime.test.mjs
+      - name: Verify live Google OAuth provider and TMS60 redirect allowlist
+        run: node scripts/tms60-auth-diagnostic.mjs
