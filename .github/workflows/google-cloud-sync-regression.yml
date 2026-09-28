@@ -1,0 +1,38 @@
+name: Google Account Sync Regression
+
+on:
+  pull_request:
+    paths:
+      - 'app.html'
+      - 'cloud-config.js'
+      - 'cloud-sync.js'
+      - 'sw.js'
+      - 'GOOGLE_SYNC_SETUP.md'
+      - 'tests/google-cloud-sync-regression.mjs'
+      - '.github/workflows/google-cloud-sync-regression.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app.html'
+      - 'cloud-config.js'
+      - 'cloud-sync.js'
+      - 'sw.js'
+      - 'GOOGLE_SYNC_SETUP.md'
+      - 'tests/google-cloud-sync-regression.mjs'
+      - '.github/workflows/google-cloud-sync-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  google-cloud-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify account, sync, backup, and privacy contracts
+        run: node tests/google-cloud-sync-regression.mjs
