@@ -617,10 +617,12 @@
 
   async function deleteCloudData(){
     if(hasActiveSession())throw new Error('End the active recall session before deleting cloud data.');
-    const {error:backupError}=await client.from('tms60_backups').delete().eq('user_id',session.user.id);
-    if(backupError)throw backupError;
-    const {error:stateError}=await client.from('tms60_sync_state').delete().eq('user_id',session.user.id);
-    if(stateError)throw stateError;
+    const userId=session?.user?.id;
+    const epoch=authEpoch;
+    if(!userId)throw new Error('Sign in before deleting TMS60 cloud data.');
+    const {error}=await client.rpc('delete_tms60_cloud_data');
+    if(error)throw error;
+    if(authEpoch!==epoch||session?.user?.id!==userId)throw Object.assign(new Error('THIEPN Account changed while cloud data was being deleted.'),{code:'account_changed'});
     lastRemoteRevision=0;lastRemoteUpdatedAt='';
     prefs.lastSyncByTranslation={};
     prefs.autoSync=false;
