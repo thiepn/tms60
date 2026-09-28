@@ -5,6 +5,9 @@
   const SUPABASE_URL='https://hycegznamzjhwinegaai.supabase.co';
   const SUPABASE_PUBLISHABLE_KEY='sb_publishable_1rZzRPzfLMaAH5pIgCwIjA_19UPMIsR';
   const SESSION_STORAGE_KEY='sb-hycegznamzjhwinegaai-auth-token';
+  const PKCE_BACKUP_KEY='tms60-pkce-verifier-backup-v1';
+  const PKCE_FLOW_KEY='tms60-pkce-flow-v1';
+  const PKCE_BACKUP_TTL_MS=15*60*1000;
   const PREF_KEY='tms60-account-sync-prefs-v1';
   const APP_SLUG='tms60';
   const MAX_BACKUPS=7;
@@ -31,14 +34,102 @@
     try{return window.top&&window.top.location?.origin===location.origin?window.top:window}catch(_){return window}
   })();
 
+  function readPkceBackup(){
+    try{
+      const raw=sessionStorage.getItem(PKCE_BACKUP_KEY);
+      if(!raw)return null;
+      const value=JSON.parse(raw);
+      const createdAt=Number(value?.createdAt||0);
+      if(!value||typeof value!=='object'||Array.isArray(value)||!value.entries||typeof value.entries!=='object'||
+        !createdAt||createdAt>Date.now()+60000||Date.now()-createdAt>PKCE_BACKUP_TTL_MS){
+        sessionStorage.removeItem(PKCE_BACKUP_KEY);
+        return null;
+      }
+      return value;
+    }catch(_){return null}
+  }
+  function writePkceBackup(value){
+    try{sessionStorage.setItem(PKCE_BACKUP_KEY,JSON.stringify(value));return true}catch(_){return false}
+  }
+  function mirrorPkceEntry(key,value){
+    if(!String(key).endsWith('-code-verifier'))return;
+    const backup=readPkceBackup()||{createdAt:Date.now(),entries:{}};
+    backup.createdAt=Date.now();
+    backup.entries[key]=String(value);
+    if(!writePkceBackup(backup))throw new Error('Browser tab storage is unavailable. Allow site data, then retry Google sign-in.');
+  }
+  function clearPkceBackup(){
+    try{sessionStorage.removeItem(PKCE_BACKUP_KEY)}catch(_){}
+    try{sessionStorage.removeItem(PKCE_FLOW_KEY)}catch(_){}
+  }
+  const authStorage=Object.freeze({
+    getItem(key){
+      if(String(key).endsWith('-code-verifier')){
+        const mirrored=readPkceBackup()?.entries?.[key];
+        if(typeof mirrored==='string')return mirrored;
+      }
+      try{return localStorage.getItem(key)}
+      catch(_){throw new Error('Browser storage is blocked. Allow site data for this site to use THIEPN Account.')}
+    },
+    setItem(key,value){
+      const text=String(value);
+      try{
+        localStorage.setItem(key,text);
+        if(localStorage.getItem(key)!==text)throw new Error('storage_verification_failed');
+      }catch(error){
+        const e=new Error(error?.name==='QuotaExceededError'
+          ?'Browser storage is full. Free some site storage, then retry sign-in.'
+          :'Browser storage is blocked or unreliable. Allow site data, then retry sign-in.');
+        e.name='TMS60AuthStorageError';
+        throw e;
+      }
+      mirrorPkceEntry(key,text);
+    },
+    removeItem(key){
+      try{localStorage.removeItem(key)}catch(_){}
+      // Keep the tab-scoped verifier mirror until callback success/restart.
+    }
+  });
+  function assertAuthStorage(){
+    const key=`tms60-auth-probe-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    authStorage.setItem(key,'ok');
+    if(authStorage.getItem(key)!=='ok')throw new Error('The browser did not retain sign-in data. Check site-data settings and retry.');
+    authStorage.removeItem(key);
+  }
+  function accountFetch(input,options={}){
+    const timeout=typeof AbortSignal?.timeout==='function'?AbortSignal.timeout(15000):null;
+    const signal=options.signal&&timeout&&typeof AbortSignal?.any==='function'
+      ?AbortSignal.any([options.signal,timeout])
+      :(options.signal||timeout||undefined);
+    return fetch(input,{...options,signal});
+  }
+  function pkceMissing(error){
+    return /PKCE code verifier not found|AuthPKCECodeVerifierMissingError/i.test(`${error?.name||''} ${error?.message||''}`);
+  }
+  function accountErrorMessage(error){
+    if(error?.name==='TMS60AuthStorageError')return error.message;
+    const code=String(error?.code||'');
+    const message=String(error?.message||'');
+    if(code==='access_denied'||/access denied/i.test(message))return 'Google sign-in was cancelled.';
+    if(pkceMissing(error))return 'This Google sign-in attempt expired or lost its browser verifier. Start Google sign-in again from TMS60.';
+    if(['refresh_token_not_found','refresh_token_already_used','session_not_found','session_expired','bad_jwt'].includes(code))return 'Your THIEPN Account session is no longer valid. Sign in again.';
+    if(Number(error?.status)===429)return 'Too many account requests. Wait a moment, then retry.';
+    if(/redirect.*not.*allowed|redirect_to/i.test(message))return 'TMS60 is not yet allowed as an OAuth return URL in the shared THIEPN Account project.';
+    if(/row-level security|permission denied|42501/i.test(message))return 'TMS60 cloud permissions were rejected. Sign out and back in; if this persists, the account deployment is incomplete.';
+    if(Number(error?.status)>=500||['AbortError','TimeoutError','AuthRetryableFetchError','TypeError'].includes(error?.name))return 'The THIEPN Account service could not be reached. Local progress is safe; retry when connected.';
+    return message||'The THIEPN Account operation failed.';
+  }
+
   const client=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{
     auth:{
       flowType:'pkce',
       persistSession:true,
       autoRefreshToken:true,
       detectSessionInUrl:false,
-      storageKey:SESSION_STORAGE_KEY
-    }
+      storageKey:SESSION_STORAGE_KEY,
+      storage:authStorage
+    },
+    global:{fetch:accountFetch}
   });
 
   let session=null;
@@ -477,6 +568,8 @@
 
   async function signInGoogle(){
     if(!isOnline())throw new Error('Connect to the internet before signing in.');
+    assertAuthStorage();
+    clearPkceBackup();
     const redirect=new URL(topWindow.location.href);
     redirect.hash='';
     redirect.search='';
@@ -490,6 +583,7 @@
       }
     });
     if(error)throw error;
+    if(data?.flowId){try{sessionStorage.setItem(PKCE_FLOW_KEY,data.flowId)}catch(_){}}
     const target=new URL(data?.url||'');
     const supabaseOrigin=new URL(SUPABASE_URL).origin;
     if(target.origin!==supabaseOrigin||target.pathname!=='/auth/v1/authorize')throw new Error('Google sign-in returned an invalid authorization destination.');
@@ -512,21 +606,31 @@
 
     const authError=url.searchParams.get('error_description')||url.searchParams.get('error');
     const code=url.searchParams.get('code');
+    const callbackFlowId=url.searchParams.get('sb_flow_id');
+    const storedFlowId=(()=>{try{return sessionStorage.getItem(PKCE_FLOW_KEY)}catch(_){return null}})();
+    const flowId=callbackFlowId||storedFlowId||null;
     if(authError){
       cleanupCallbackUrl(url);
-      throw new Error(authError);
+      clearPkceBackup();
+      const error=new Error(authError);
+      error.code=url.searchParams.get('error')||url.searchParams.get('error_code')||'oauth_error';
+      throw error;
     }
     if(!code)return false;
 
-    const {data,error}=await client.auth.exchangeCodeForSession(code);
+    let result=await client.auth.exchangeCodeForSession(code,flowId?{flowId}:undefined);
+    if(result.error&&flowId&&pkceMissing(result.error)){
+      result=await client.auth.exchangeCodeForSession(code);
+    }
+    if(result.error)throw result.error;
     cleanupCallbackUrl(url);
-    if(error)throw error;
-    session=data.session||null;
+    clearPkceBackup();
+    session=result.data?.session||null;
     return Boolean(session);
   }
 
   function cleanupCallbackUrl(url){
-    for(const key of ['code','error','error_code','error_description','tms60_auth'])url.searchParams.delete(key);
+    for(const key of ['code','sb_flow_id','error','error_code','error_description','tms60_auth'])url.searchParams.delete(key);
     const clean=`${url.pathname}${url.search}${url.hash}`;
     try{topWindow.history.replaceState({},topWindow.document?.title||document.title,clean)}catch(_){}
   }
@@ -551,8 +655,9 @@
       await activateSession(data.session||null,{sync:true});
       if(callbackHandled)toast('Signed in to THIEPN Account.');
     }catch(error){
-      setAccountStatus('error',String(error?.message||error));
-      toast(String(error?.message||error),'error');
+      const message=accountErrorMessage(error);
+      setAccountStatus('error',message);
+      toast(message,'error');
     }
   }
 
@@ -592,7 +697,7 @@
           <div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn danger" data-account-action="delete-cloud">Delete cloud data</button></div>`);
       }else if(action==='delete-cloud'){await deleteCloudData();closeModal(false)}
     }catch(error){
-      const message=String(error?.message||error||'Account action failed.');
+      const message=accountErrorMessage(error);
       setAccountStatus(isOnline()?'error':'offline',message);
       toast(message,'error');
     }finally{
