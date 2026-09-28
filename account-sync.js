@@ -527,12 +527,16 @@
 
   async function createCloudBackup(){
     if(hasActiveSession())throw new Error('End the active recall session before creating a cloud backup.');
+    const userId=session?.user?.id;
+    const epoch=authEpoch;
+    if(!userId)throw new Error('Sign in before creating a cloud backup.');
     setAccountStatus('syncing','Synchronizing before backup…');
     const syncResult=await performSync({manual:true});
+    if(authEpoch!==epoch||session?.user?.id!==userId)throw Object.assign(new Error('THIEPN Account changed before the backup could be created.'),{code:'account_changed'});
     const clean=sanitizeState(state);
     assertCloudStateSize(JSON.stringify(clean));
     const {error}=await client.from('tms60_backups').insert({
-      user_id:session.user.id,
+      user_id:userId,
       translation_id:TRANSLATION_ID,
       state_schema:SCHEMA,
       state:clean,
@@ -543,7 +547,7 @@
 
     const {data:list,error:listError}=await client.from('tms60_backups')
       .select('id,created_at')
-      .eq('user_id',session.user.id)
+      .eq('user_id',userId)
       .eq('translation_id',TRANSLATION_ID)
       .order('created_at',{ascending:false})
       .limit(100);
@@ -559,14 +563,18 @@
 
   async function openRestoreBackups(){
     if(hasActiveSession())throw new Error('End the active recall session before restoring cloud data.');
+    const userId=session?.user?.id;
+    const epoch=authEpoch;
+    if(!userId)throw new Error('Sign in before loading cloud backups.');
     setAccountStatus('syncing','Loading cloud backups…');
     const {data,error}=await client.from('tms60_backups')
       .select('id,created_at,source_revision,state_schema,translation_id')
-      .eq('user_id',session.user.id)
+      .eq('user_id',userId)
       .eq('translation_id',TRANSLATION_ID)
       .order('created_at',{ascending:false})
       .limit(MAX_BACKUPS);
     if(error)throw error;
+    if(authEpoch!==epoch||session?.user?.id!==userId)throw Object.assign(new Error('THIEPN Account changed while backups were loading.'),{code:'account_changed'});
     restoreBackups=data||[];
     setAccountStatus('synced',restoreBackups.length?'Cloud backups ready':'No cloud backups yet');
     if(!restoreBackups.length){toast('No cloud backups are available yet.','error');return}
@@ -578,22 +586,27 @@
 
   async function restoreBackup(index){
     if(hasActiveSession())throw new Error('End the active recall session before restoring cloud data.');
+    const userId=session?.user?.id;
+    const epoch=authEpoch;
+    if(!userId)throw new Error('Sign in before restoring cloud data.');
     const item=restoreBackups[Number(index)];
     if(!item)throw new Error('That cloud backup is no longer available.');
 
     const {data,error}=await client.from('tms60_backups')
       .select('id,translation_id,state_schema,state,created_at')
-      .eq('user_id',session.user.id)
+      .eq('user_id',userId)
       .eq('translation_id',TRANSLATION_ID)
       .eq('id',item.id)
       .single();
     if(error)throw error;
+    if(authEpoch!==epoch||session?.user?.id!==userId)throw Object.assign(new Error('THIEPN Account changed while the selected backup was loading.'),{code:'account_changed'});
     if(Number(data.state_schema)>SCHEMA||!completeStateShape(data.state))throw new Error('That backup is incompatible with this TMS60 version.');
     const selectedState=sanitizeState(data.state);
 
     // Fetch the selected backup before creating the safety backup: retention
     // cleanup may otherwise delete the oldest selected backup.
     await createCloudBackup();
+    if(authEpoch!==epoch||session?.user?.id!==userId)throw Object.assign(new Error('THIEPN Account changed before restore was applied.'),{code:'account_changed'});
 
     createRecoverySnapshot();
     state=selectedState;
@@ -620,7 +633,7 @@
     const userId=session?.user?.id;
     const epoch=authEpoch;
     if(!userId)throw new Error('Sign in before deleting TMS60 cloud data.');
-    const {error}=await client.rpc('delete_tms60_cloud_data');
+    const {error}=await client.rpc('delete_tms60_cloud_data',{p_expected_user_id:userId});
     if(error)throw error;
     if(authEpoch!==epoch||session?.user?.id!==userId)throw Object.assign(new Error('THIEPN Account changed while cloud data was being deleted.'),{code:'account_changed'});
     lastRemoteRevision=0;lastRemoteUpdatedAt='';
