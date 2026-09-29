@@ -31,7 +31,7 @@ check(index.includes("prompt.prompt()")&&index.includes("prompt.userChoice"),
   'In-app installer invokes the browser install flow');
 check(index.includes('id="pwa-install-button"'),
   'Install action exists for browser-confirmed PWA installation');
-check(Array.isArray(manifest.icons)&&['192x192','512x512'].every(size=>manifest.icons.some(icon=>icon.sizes===size&&String(icon.purpose||'').split(/\\s+/).includes('maskable'))),
+check(Array.isArray(manifest.icons)&&['192x192','512x512'].every(size=>manifest.icons.some(icon=>icon.sizes===size&&String(icon.purpose||'').split(/\s+/).includes('maskable'))),
   'Both raster install icons are maskable');
 
 process.exitCode=failures?1:0;
