@@ -1,7 +1,8 @@
 'use strict';
-const CACHE='tms60-supabase-account43-2026-09-28';
+const CACHE='tms60-webapk45-2026-09-29';
 const CORE=['./','./index.html','./app.html','./translations.js','./p2-5-source-prep.js','./p2-5-shell-runtime.js','./p2-6-theme-sync.js','./runtime-translation-switch.js','./p2-8-localized-tts-reference.js','./niv-service.json','./enhancements.js','./enhancements-legacy.js','./rc3-hardening.js','./language-switch-hardening.js','./guided-learning-chain.js','./qol-fast-recall.js','./qol-cloze-helpers.js','./qol-word-navigation.js','./ux-patch.js','./ux-patch-core.js','./typo-tolerance.js','./typo-scoring-finalizer.js','./enhancements-core.js','./localization-runtime.js','./localization-completion.js','./favicon.svg','./icon-192.png','./icon-512.png','./vendor/supabase-2.116.0.js','./account-sync.js','./manifest.webmanifest'];
-const STATIC_ASSETS=new Set(['./favicon.svg','./icon-192.png','./icon-512.png','./manifest.webmanifest'].map(url=>new URL(url,self.location.href).pathname));
+const STATIC_ASSETS=new Set(['./favicon.svg','./icon-192.png','./icon-512.png'].map(url=>new URL(url,self.location.href).pathname));
+const MANIFEST_PATH=new URL('./manifest.webmanifest',self.location.href).pathname;
 
 function cacheSuccessful(request,response){
   if(!response||!response.ok||response.type==='opaque')return Promise.resolve();
@@ -14,7 +15,7 @@ async function cachedResponse(request){
 }
 
 function networkFirst(request,event,{navigation=false}={}){
-  const network=fetch(request);
+  const network=fetch(new Request(request,{cache:'no-cache'}));
   event.waitUntil(network.then(response=>cacheSuccessful(request,response)).catch(()=>{}));
   return network.catch(async()=>{
     const hit=await cachedResponse(request);
@@ -94,6 +95,7 @@ self.addEventListener('fetch',event=>{
   const url=new URL(req.url);if(url.origin!==location.origin)return;
   if(req.headers.has('range')){event.respondWith(fetch(req));return}
   if(req.mode==='navigate'){event.respondWith(networkFirst(req,event,{navigation:true}));return}
+  if(url.pathname===MANIFEST_PATH){event.respondWith(networkFirst(req,event));return}
   if(STATIC_ASSETS.has(url.pathname)){event.respondWith(cacheFirst(req));return}
   event.respondWith(networkFirst(req,event));
 });
