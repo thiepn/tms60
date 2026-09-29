@@ -10,9 +10,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="TMS 60">
 <title>TMS 60</title>
-<link rel="manifest" href="/tms60/manifest.webmanifest">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/tms60/icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <script>
 let tmsDeferredInstallPrompt=null;
 function tmsStandalone(){
@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   syncTmsInstallUi();
 });
 if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
-  navigator.serviceWorker.register('/tms60/sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(()=>{});
+  navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(()=>{});
 }
 </script>
 <style>
