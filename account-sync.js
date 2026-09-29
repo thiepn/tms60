@@ -36,7 +36,16 @@
   }
 
   const topWindow=(()=>{
-    try{return window.top&&window.top.location?.origin===location.origin?window.top:window}catch(_){return window}
+    try{
+      // srcdoc documents report an opaque/null location.origin even when the
+      // parent is script-accessible. Accessing top.location.href is the actual
+      // same-origin test: it succeeds for our shell and throws cross-origin.
+      if(window.top&&window.top!==window){
+        const href=window.top.location.href;
+        if(typeof href==='string'&&href)return window.top;
+      }
+    }catch(_){}
+    return window;
   })();
 
   function readPkceBackup(){
