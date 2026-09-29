@@ -733,11 +733,11 @@
     if(!isOnline())throw new Error('Connect to the internet before signing in.');
     assertAuthStorage();
     clearPkceBackup();
-    const redirect=topWindow.location.hostname==='tms60.thiepn.dev'
-      ?new URL(AUTH_CALLBACK_RELAY)
-      :new URL(topWindow.location.href);
+    const currentUrl=new URL(topWindow.location.href);
+    const dedicatedOrigin=currentUrl.hostname==='tms60.thiepn.dev';
+    const redirect=dedicatedOrigin?new URL(AUTH_CALLBACK_RELAY):currentUrl;
     redirect.hash='';
-    if(topWindow.location.hostname!=='tms60.thiepn.dev'){
+    if(!dedicatedOrigin){
       redirect.search='';
       redirect.searchParams.set('tms60_auth','1');
     }
