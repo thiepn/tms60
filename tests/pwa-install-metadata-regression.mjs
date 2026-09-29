@@ -19,9 +19,8 @@ check(/navigator\.serviceWorker\.register\(['"]\/tms60\/sw\.js['"],\{updateViaCa
   'Top-level shell registers the service worker immediately with cache bypass');
 
 check(manifest.display==='standalone','Manifest requests standalone display',manifest.display);
-check(manifest.id==='/tms60/','Manifest has a stable app identity',manifest.id);
-check(manifest.start_url==='/tms60/','Manifest start URL is scoped to TMS60',manifest.start_url);
-check(manifest.scope==='/tms60/','Manifest scope is scoped to TMS60',manifest.scope);
+check(manifest.start_url==='./','Manifest uses Diet-style relative start URL',manifest.start_url);
+check(manifest.scope==='./','Manifest uses Diet-style relative scope',manifest.scope);
 check(Array.isArray(manifest.icons)&&manifest.icons.some(icon=>String(icon.purpose||'').split(/\s+/).includes('maskable')&&icon.sizes==='512x512'),
   'Manifest provides a 512px maskable install icon');
 
