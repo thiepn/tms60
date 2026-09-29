@@ -36,7 +36,9 @@ try{
       if(/manifest\.webmanifest|\/sw\.js(?:\?|$)/.test(u))responses.push({url:u,status:response.status(),contentType:response.headers()['content-type']||''});
     });
     await page.goto(url,{waitUntil:'domcontentloaded',timeout:30000});
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(1500);
+    await page.mouse.click(24,24);
+    await page.waitForTimeout(32000);
 
     const cdp=await context.newCDPSession(page);
     const manifest=await cdp.send('Page.getAppManifest');
