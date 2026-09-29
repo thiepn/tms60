@@ -44,6 +44,26 @@ try{
       };
     });
 
+    const iconDiagnostics={};
+    for(const iconName of ['icon-192.png','icon-512.png']){
+      const iconUrl=new URL(iconName,url).href;
+      const response=await fetch(iconUrl,{cache:'no-store'});
+      const bytes=new Uint8Array(await response.arrayBuffer());
+      const pngSignature=[137,80,78,71,13,10,26,10].every((value,index)=>bytes[index]===value);
+      const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+      iconDiagnostics[iconName]={
+        url:iconUrl,
+        status:response.status,
+        contentType:response.headers.get('content-type')||'',
+        bytes:bytes.length,
+        pngSignature,
+        width:pngSignature&&bytes.length>=24?view.getUint32(16):null,
+        height:pngSignature&&bytes.length>=24?view.getUint32(20):null,
+        bitDepth:pngSignature&&bytes.length>=26?bytes[24]:null,
+        colorType:pngSignature&&bytes.length>=26?bytes[25]:null
+      };
+    }
+
     const result={
       name,url,
       manifestUrl:manifest.url||'',
@@ -54,7 +74,8 @@ try{
       appId,
       registration,
       responses,
-      consoleMessages
+      consoleMessages,
+      iconDiagnostics
     };
     console.log('=== '+name.toUpperCase()+' ===');
     console.log(JSON.stringify(result,null,2));
