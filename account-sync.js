@@ -10,6 +10,7 @@
   const PKCE_BACKUP_TTL_MS=15*60*1000;
   const PREF_KEY='tms60-account-sync-prefs-v1';
   const APP_SLUG='tms60';
+  const AUTH_CALLBACK_RELAY='https://thiepn.dev/tms60/?tms60_auth=1';
   const MAX_BACKUPS=7;
   const AUTO_SYNC_DEBOUNCE_MS=4000;
   const AUTO_SYNC_MIN_INTERVAL_MS=15000;
@@ -732,10 +733,14 @@
     if(!isOnline())throw new Error('Connect to the internet before signing in.');
     assertAuthStorage();
     clearPkceBackup();
-    const redirect=new URL(topWindow.location.href);
+    const redirect=topWindow.location.hostname==='tms60.thiepn.dev'
+      ?new URL(AUTH_CALLBACK_RELAY)
+      :new URL(topWindow.location.href);
     redirect.hash='';
-    redirect.search='';
-    redirect.searchParams.set('tms60_auth','1');
+    if(topWindow.location.hostname!=='tms60.thiepn.dev'){
+      redirect.search='';
+      redirect.searchParams.set('tms60_auth','1');
+    }
     const {data,error}=await client.auth.signInWithOAuth({
       provider:'google',
       options:{
