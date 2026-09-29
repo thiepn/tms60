@@ -71,6 +71,7 @@ try{
   check(source.includes('async function cacheFirst('),'Cache-first strategy is explicit');
   check(source.includes("if(req.mode==='navigate')"),'Navigation requests have an explicit strategy');
   check(source.includes('STATIC_ASSETS.has(url.pathname)'),'Static assets have an explicit strategy');
+  check(source.includes('url.pathname===MANIFEST_PATH')&&source.includes('event.respondWith(networkFirst(req,event))'),'Manifest is network-first so install metadata cannot remain stale');
   check(source.includes('event.respondWith(networkFirst(req,event))'),'Other same-origin GETs use normal-cache network-first');
   check(source.includes("fetch(url,{cache:'reload'})"),'Install-time freshness remains explicit');
 
@@ -119,7 +120,7 @@ try{
     check(offlineCore['translations.js']?.ok&&offlineCore['translations.js'].length>100,'Mutable core asset falls back to Cache Storage offline',JSON.stringify(offlineCore['translations.js']));
     check(offlineCore['app.html']?.ok&&offlineCore['app.html'].length>1000,'App document falls back to Cache Storage offline',JSON.stringify(offlineCore['app.html']));
     check(offlineCore['icon-192.png']?.ok&&offlineCore['icon-192.png'].length>100,'Static icon is served cache-first offline',JSON.stringify(offlineCore['icon-192.png']));
-    check(offlineCore['manifest.webmanifest']?.ok&&offlineCore['manifest.webmanifest'].length>100,'Manifest is served cache-first offline',JSON.stringify(offlineCore['manifest.webmanifest']));
+    check(offlineCore['manifest.webmanifest']?.ok&&offlineCore['manifest.webmanifest'].length>100,'Manifest falls back to Cache Storage offline',JSON.stringify(offlineCore['manifest.webmanifest']));
   }catch(error){
     check(false,'Offline reload and asset fallback',String(error?.stack||error));
   }
