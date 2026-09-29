@@ -5,6 +5,17 @@ const targets=[
   ['diet','https://thiepn.dev/diet/']
 ];
 
+const dnsDiagnostics={};
+for(const type of ['CNAME','A','AAAA']){
+  try{
+    const response=await fetch(`https://dns.google/resolve?name=tms60.thiepn.dev&type=${type}`,{headers:{accept:'application/dns-json'}});
+    const data=await response.json();
+    dnsDiagnostics[type]={status:data.Status,answers:(data.Answer||[]).map(answer=>({name:answer.name,type:answer.type,ttl:answer.TTL,data:answer.data}))};
+  }catch(error){dnsDiagnostics[type]={error:String(error)}}
+}
+console.log('=== GOOGLE DNS ===');
+console.log(JSON.stringify(dnsDiagnostics,null,2));
+
 const browser=await chromium.launch({headless:true});
 let failed=false;
 try{
