@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 
 const targets=[
-  ['tms60','http://127.0.0.1:4173/tms60/'],
+  ['tms60','http://127.0.0.1:4173/'],
   ['diet','https://thiepn.dev/diet/']
 ];
 
@@ -12,6 +12,8 @@ try{
     const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
     const page=await context.newPage();
     const responses=[];
+    const consoleMessages=[];
+    page.on('console',message=>consoleMessages.push({type:message.type(),text:message.text()}));
     page.on('response',response=>{
       const u=response.url();
       if(/manifest\.webmanifest|\/sw\.js(?:\?|$)/.test(u))responses.push({url:u,status:response.status(),contentType:response.headers()['content-type']||''});
@@ -41,7 +43,8 @@ try{
       installabilityErrors:installability.installabilityErrors||[],
       appId,
       registration,
-      responses
+      responses,
+      consoleMessages
     };
     console.log('=== '+name.toUpperCase()+' ===');
     console.log(JSON.stringify(result,null,2));
@@ -50,7 +53,10 @@ try{
       if(!manifest.url)failed=true;
       if((manifest.errors||[]).some(error=>error.critical))failed=true;
       if((installability.installabilityErrors||[]).length)failed=true;
-      if(!registration.registrations.some(reg=>reg.scope.includes('/tms60/')))failed=true;
+      const expectedScope='http://127.0.0.1:4173/';
+      if(!registration.registrations.some(reg=>reg.scope===expectedScope&&reg.active===expectedScope+'sw.js'))failed=true;
+      if(registration.registrations.some(reg=>reg.scope.includes('/tms60/')))failed=true;
+      if(consoleMessages.some(message=>/\/tms60\/sw\.js|service worker registration failed/i.test(message.text)))failed=true;
     }
     await context.close();
   }

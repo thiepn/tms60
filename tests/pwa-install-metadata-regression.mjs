@@ -9,6 +9,7 @@ const check=(condition,name,detail='')=>{
 const index=fs.readFileSync('index.html','utf8');
 const manifest=JSON.parse(fs.readFileSync('manifest.webmanifest','utf8'));
 const sw=fs.readFileSync('sw.js','utf8');
+const shellRuntime=fs.readFileSync('p2-5-shell-runtime.js','utf8');
 
 check(/<link\b[^>]*rel=["']manifest["'][^>]*href=["']manifest\.webmanifest["'][^>]*>/i.test(index),
   'Manifest is linked statically with the Diet-style relative path');
@@ -45,3 +46,8 @@ check(sw.includes("fetch(new Request(request,{cache:'no-cache'}))"),
   'Network-first requests revalidate instead of accepting stale browser cache');
 
 process.exitCode=failures?1:0;
+
+check(!/\/tms60\/(?:sw\.js|manifest\.webmanifest|icon-192\.png)/.test(shellRuntime),
+  'Shell runtime contains no obsolete project-path PWA URLs');
+check(!/navigator\.serviceWorker\.register/.test(shellRuntime),
+  'Shell runtime does not duplicate top-level service-worker registration');
