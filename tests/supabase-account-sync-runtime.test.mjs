@@ -368,7 +368,7 @@ test('Google sign-in preserves PKCE verifier recovery state before navigation',a
 });
 
 
-test('dedicated TMS60 origin uses the trusted callback relay',async()=>{
+test('dedicated TMS60 origin uses its own direct PKCE callback',async()=>{
   const prefs=JSON.stringify({autoSync:false,deviceId:'device-test',lastSyncByTranslation:{},boundUserByTranslation:{}});
   const runtime=createRuntime({
     href:'https://tms60.thiepn.dev/',
@@ -378,7 +378,7 @@ test('dedicated TMS60 origin uses the trusted callback relay',async()=>{
 
   await runtime.context.TMS60Account.signInGoogle();
   assert.equal(runtime.oauthOptions[0]?.provider,'google');
-  assert.equal(runtime.oauthOptions[0]?.options?.redirectTo,'https://thiepn.dev/tms60/?tms60_auth=1');
+  assert.equal(runtime.oauthOptions[0]?.options?.redirectTo,'https://tms60.thiepn.dev/?tms60_auth=1');
   assert.equal(runtime.sessionStorage.getItem('tms60-pkce-flow-v1'),'flow-start');
   const backup=JSON.parse(runtime.sessionStorage.getItem('tms60-pkce-verifier-backup-v1'));
   assert.ok(Object.keys(backup.entries).some(key=>key.endsWith('-code-verifier')));
