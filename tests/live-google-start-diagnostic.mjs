@@ -22,7 +22,9 @@ async function frameOf(page,timeout=45000){
 }
 
 async function nav(frame,view){
-  await frame.locator(`#desktop-nav [data-view="${view}"]`).click();
+  const mobile=frame.locator(`.mobile-nav [data-view="${view}"]`);
+  if(await mobile.isVisible())await mobile.click();
+  else await frame.locator(`#desktop-nav [data-view="${view}"]`).click();
   await frame.waitForFunction(v=>document.documentElement.dataset.view===v,view,{timeout:10000});
 }
 
