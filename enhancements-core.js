@@ -21,6 +21,9 @@
   };
 
   function setupPwaShell(){
+    // The real PWA shell is the top-level index document. The inner srcdoc
+    // application must never register its own service worker or install metadata.
+    if(window!==window.top)return;
     if (!document.querySelector('link[rel="manifest"]')) {
       const link=document.createElement('link'); link.rel='manifest'; link.href='manifest.webmanifest'; document.head.appendChild(link);
     }

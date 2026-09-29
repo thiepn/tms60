@@ -1,0 +1,48 @@
+name: Account Srcdoc OAuth Regression
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'account-sync.js'
+      - 'enhancements-core.js'
+      - 'sw.js'
+      - 'index.html'
+      - 'app.html'
+      - 'tests/account-srcdoc-oauth-regression.mjs'
+      - '.github/workflows/account-srcdoc-oauth-regression.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'account-sync.js'
+      - 'enhancements-core.js'
+      - 'sw.js'
+      - 'index.html'
+      - 'app.html'
+      - 'tests/account-srcdoc-oauth-regression.mjs'
+      - '.github/workflows/account-srcdoc-oauth-regression.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - run: |
+          nohup python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/tms60-srcdoc-oauth.log 2>&1 &
+          for i in {1..30}; do
+            curl --fail --silent http://127.0.0.1:4173/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/tms60-srcdoc-oauth.log
+          exit 1
+      - run: node tests/account-srcdoc-oauth-regression.mjs
