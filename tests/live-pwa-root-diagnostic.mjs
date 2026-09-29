@@ -13,7 +13,7 @@ try{
     const consoleMessages=[];
     const responses=[];
     let bip=false;
-    page.on('console',m=>consoleMessages.push({type:m.type(),text:m.text()}));
+    page.on('console',m=>consoleMessages.push({type:m.type(),text:m.text(),location:m.location()}));
     page.on('response',r=>{
       const u=r.url();
       if(/manifest\.webmanifest|\/sw\.js(?:\?|$)/.test(u))responses.push({url:u,status:r.status(),contentType:r.headers()['content-type']||''});
