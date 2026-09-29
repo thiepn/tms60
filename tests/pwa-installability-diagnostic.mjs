@@ -1,7 +1,8 @@
 import { chromium } from 'playwright';
 
 const targets=[
-  ['tms60','http://127.0.0.1:4173/'],
+  ['tms60-candidate','http://127.0.0.1:4173/'],
+  ['tms60-live','https://tms60.thiepn.dev/'],
   ['diet','https://thiepn.dev/diet/']
 ];
 
@@ -49,11 +50,11 @@ try{
     console.log('=== '+name.toUpperCase()+' ===');
     console.log(JSON.stringify(result,null,2));
 
-    if(name==='tms60'){
+    if(name.startsWith('tms60')){
       if(!manifest.url)failed=true;
       if((manifest.errors||[]).some(error=>error.critical))failed=true;
       if((installability.installabilityErrors||[]).length)failed=true;
-      const expectedScope='http://127.0.0.1:4173/';
+      const expectedScope=name==='tms60-live'?'https://tms60.thiepn.dev/':'http://127.0.0.1:4173/';
       if(!registration.registrations.some(reg=>reg.scope===expectedScope&&reg.active===expectedScope+'sw.js'))failed=true;
       if(registration.registrations.some(reg=>reg.scope.includes('/tms60/')))failed=true;
       if(consoleMessages.some(message=>/\/tms60\/sw\.js|service worker registration failed/i.test(message.text)))failed=true;
