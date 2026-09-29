@@ -25,4 +25,13 @@ check(manifest.scope==='/tms60/','Manifest scope is scoped to TMS60',manifest.sc
 check(Array.isArray(manifest.icons)&&manifest.icons.some(icon=>String(icon.purpose||'').split(/\s+/).includes('maskable')&&icon.sizes==='512x512'),
   'Manifest provides a 512px maskable install icon');
 
+check(index.includes("window.addEventListener('beforeinstallprompt'"),
+  'Top-level shell captures the real browser PWA install prompt');
+check(index.includes("prompt.prompt()")&&index.includes("prompt.userChoice"),
+  'In-app installer invokes the browser install flow');
+check(index.includes('id="pwa-install-button"'),
+  'Install action exists for browser-confirmed PWA installation');
+check(Array.isArray(manifest.icons)&&['192x192','512x512'].every(size=>manifest.icons.some(icon=>icon.sizes===size&&String(icon.purpose||'').split(/\\s+/).includes('maskable'))),
+  'Both raster install icons are maskable');
+
 process.exitCode=failures?1:0;
