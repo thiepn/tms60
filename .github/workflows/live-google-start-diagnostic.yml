@@ -1,0 +1,26 @@
+name: Live Google Sign-In Start Diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tests/live-google-start-diagnostic.mjs'
+      - '.github/workflows/live-google-start-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - run: node tests/live-google-start-diagnostic.mjs
