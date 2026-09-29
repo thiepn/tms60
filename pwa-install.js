@@ -78,8 +78,8 @@
       return null;
     }
     try {
-      const registration = await navigator.serviceWorker.register('./sw.js', {
-        scope: './',
+      const registration = await navigator.serviceWorker.register('/sw.js', {
+        scope: '/',
         updateViaCache: 'none'
       });
       await navigator.serviceWorker.ready;
