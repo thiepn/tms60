@@ -7,6 +7,8 @@ on:
       - 'index.html'
       - 'manifest.webmanifest'
       - 'sw.js'
+      - 'p2-5-shell-runtime.js'
+      - 'enhancements-core.js'
       - 'tests/pwa-installability-diagnostic.mjs'
       - '.github/workflows/pwa-webapk-diagnostic.yml'
 
@@ -27,9 +29,9 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Serve candidate
         run: |
-          nohup python3 -m http.server 4173 --bind 127.0.0.1 --directory "$GITHUB_WORKSPACE/.." >/tmp/pwa-diagnostic.log 2>&1 &
+          nohup python3 -m http.server 4173 --bind 127.0.0.1 --directory "$GITHUB_WORKSPACE" >/tmp/pwa-diagnostic.log 2>&1 &
           for i in {1..30}; do
-            curl --fail --silent http://127.0.0.1:4173/tms60/ >/dev/null && exit 0
+            curl --fail --silent http://127.0.0.1:4173/ >/dev/null && exit 0
             sleep 1
           done
           cat /tmp/pwa-diagnostic.log
