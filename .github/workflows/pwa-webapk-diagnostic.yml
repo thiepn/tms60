@@ -1,0 +1,37 @@
+name: PWA WebAPK Diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'manifest.webmanifest'
+      - 'sw.js'
+      - 'tests/pwa-installability-diagnostic.mjs'
+      - '.github/workflows/pwa-webapk-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Serve candidate
+        run: |
+          nohup python3 -m http.server 4173 --bind 127.0.0.1 --directory "$GITHUB_WORKSPACE/.." >/tmp/pwa-diagnostic.log 2>&1 &
+          for i in {1..30}; do
+            curl --fail --silent http://127.0.0.1:4173/tms60/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/pwa-diagnostic.log
+          exit 1
+      - run: node tests/pwa-installability-diagnostic.mjs
