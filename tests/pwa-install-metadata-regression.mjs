@@ -27,12 +27,12 @@ check(manifest.scope==='./','Manifest uses Diet-style relative scope',manifest.s
 check(Array.isArray(manifest.icons)&&['192x192','512x512'].every(size=>manifest.icons.some(icon=>icon.sizes===size&&String(icon.purpose||'').split(/\s+/).includes('maskable'))),
   'Both raster install icons are maskable');
 
-check(index.includes("window.addEventListener('beforeinstallprompt'"),
-  'Top-level shell captures the real browser PWA install prompt');
-check(index.includes("prompt.prompt()")&&index.includes("prompt.userChoice"),
-  'In-app installer invokes the browser install flow');
-check(index.includes('id="pwa-install-button"'),
-  'Install action exists for browser-confirmed PWA installation');
+check(!index.includes("beforeinstallprompt"),
+  'TMS60 does not intercept Chrome native PWA installation');
+check(!index.includes('id="pwa-install-button"'),
+  'No custom install UI overrides the browser install flow');
+check(!index.includes("preventDefault()")||!index.includes("beforeinstallprompt"),
+  'Native install promotion is not suppressed');
 
 check(/const CACHE='tms60-[a-z0-9-]+-\d{4}-\d{2}-\d{2}'/.test(sw),
   'TMS60 uses a dated namespaced device cache revision');

@@ -14,38 +14,6 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <script>
-let tmsDeferredInstallPrompt=null;
-function tmsStandalone(){
-  return window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone===true;
-}
-function syncTmsInstallUi(){
-  const banner=document.getElementById('pwa-install');
-  if(!banner)return;
-  banner.classList.toggle('hidden',!tmsDeferredInstallPrompt||tmsStandalone());
-}
-window.addEventListener('beforeinstallprompt',event=>{
-  event.preventDefault();
-  tmsDeferredInstallPrompt=event;
-  syncTmsInstallUi();
-});
-window.addEventListener('appinstalled',()=>{
-  tmsDeferredInstallPrompt=null;
-  syncTmsInstallUi();
-});
-document.addEventListener('DOMContentLoaded',()=>{
-  document.getElementById('pwa-install-button')?.addEventListener('click',async()=>{
-    const prompt=tmsDeferredInstallPrompt;
-    if(!prompt)return;
-    prompt.prompt();
-    await prompt.userChoice.catch(()=>null);
-    tmsDeferredInstallPrompt=null;
-    syncTmsInstallUi();
-  });
-  document.getElementById('pwa-install-dismiss')?.addEventListener('click',()=>{
-    document.getElementById('pwa-install')?.classList.add('hidden');
-  });
-  syncTmsInstallUi();
-});
 if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
   navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(()=>{});
 }
@@ -58,7 +26,6 @@ button,select{font:inherit}
 #app-frame.ready{opacity:1}
 .boot{position:fixed;inset:0;display:grid;place-items:center;background:#070809;color:#aeb5c0;z-index:2;font-size:.9rem;padding:24px;text-align:center}.boot.hidden{display:none}
 .notice{position:fixed;z-index:1500;top:16px;left:50%;transform:translateX(-50%);width:min(620px,calc(100% - 28px));padding:11px 14px;border:1px solid rgba(255,255,255,.15);border-radius:12px;background:#20242a;color:#f4f6f8;box-shadow:0 12px 36px rgba(0,0,0,.35);font-size:.86rem;line-height:1.4}.notice.hidden{display:none}.notice.error{border-color:#8f424a;background:#32191d}
-.pwa-install{position:fixed;z-index:1450;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(560px,calc(100% - 28px));display:flex;align-items:center;gap:12px;padding:12px 13px 12px 15px;border:1px solid rgba(255,255,255,.16);border-radius:16px;background:rgba(20,22,26,.96);color:#f3f5f7;box-shadow:0 18px 46px rgba(0,0,0,.42);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}.pwa-install.hidden{display:none}.pwa-install-copy{min-width:0;flex:1}.pwa-install-copy strong{display:block;font-size:.9rem}.pwa-install-copy span{display:block;margin-top:2px;color:#aeb5c0;font-size:.76rem;line-height:1.35}.pwa-install-action{border:1px solid #f3f5f7;border-radius:11px;background:#f3f5f7;color:#101216;padding:9px 12px;font-weight:800;white-space:nowrap;cursor:pointer}.pwa-install-dismiss{width:36px;height:36px;border:0;border-radius:10px;background:transparent;color:#aeb5c0;font-size:1.2rem;cursor:pointer}
 .onboarding-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:rgba(3,4,5,.72);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}.onboarding-backdrop.hidden{display:none}
 .onboarding{width:min(760px,100%);max-height:min(900px,calc(100dvh - 40px));overflow:auto;border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:25px;background:linear-gradient(145deg,#17191d,#0e1013);box-shadow:0 30px 90px rgba(0,0,0,.58);color:#f3f5f7}
 .brand{display:flex;align-items:center;gap:13px;padding-bottom:17px;border-bottom:1px solid rgba(255,255,255,.1)}.mark{width:52px;height:52px;border-radius:17px;display:grid;place-items:center;background:linear-gradient(145deg,#d8dce2,#737b86 54%,#24272c 55%,#08090b);font-weight:850;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.3)}.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:#9da4ae;font-weight:800}.brand strong{display:block;margin-top:2px}
@@ -74,11 +41,6 @@ h1{margin:22px 0 7px;font-size:clamp(1.65rem,4vw,2.15rem);line-height:1.08;lette
 <body>
 <div class="boot" id="boot">Loading TMS 60…</div>
 <div class="notice hidden" id="notice" role="status"></div>
-<div class="pwa-install hidden" id="pwa-install" role="region" aria-label="Install TMS 60">
-  <div class="pwa-install-copy"><strong>Install TMS 60</strong><span>Install as a real app on this device.</span></div>
-  <button class="pwa-install-action" id="pwa-install-button" type="button">Install</button>
-  <button class="pwa-install-dismiss" id="pwa-install-dismiss" type="button" aria-label="Dismiss install prompt">×</button>
-</div>
 <iframe id="app-frame" title="TMS 60 Memory Lab"></iframe>
 <div class="onboarding-backdrop hidden" id="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
   <div class="onboarding">
