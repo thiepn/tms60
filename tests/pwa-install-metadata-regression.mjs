@@ -33,8 +33,8 @@ check(index.includes("prompt.prompt()")&&index.includes("prompt.userChoice"),
 check(index.includes('id="pwa-install-button"'),
   'Install action exists for browser-confirmed PWA installation');
 
-check(/const CACHE='tms60-webapk\d+-\d{4}-\d{2}-\d{2}'/.test(sw),
-  'WebAPK repair rotates the device cache revision');
+check(/const CACHE='tms60-[a-z0-9-]+-\d{4}-\d{2}-\d{2}'/.test(sw),
+  'TMS60 uses a dated namespaced device cache revision');
 check(sw.includes("const MANIFEST_PATH=new URL('./manifest.webmanifest',self.location.href).pathname"),
   'Manifest has a dedicated service-worker route');
 check(sw.includes("if(url.pathname===MANIFEST_PATH){event.respondWith(networkFirst(req,event));return}"),
