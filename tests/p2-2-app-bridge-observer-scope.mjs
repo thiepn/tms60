@@ -98,8 +98,11 @@ try{
   check(selectors.language===1&&selectors.bible===1&&selectors.combined&&selectors.versions===7,'Bridge survives repeated Settings rerenders',JSON.stringify(selectors));
 
   // Heavy mutations in Study must not wake the Settings bridge observer.
-  const beforeStudyMutation=await page.evaluate(()=>({...window.__TMS60_APP_BRIDGE_STATS__}));
+  // Navigate first, then let navigation-triggered Settings cleanup settle before
+  // measuring unrelated Study mutations.
   await nav(frame,'study');
+  await page.waitForTimeout(180);
+  const beforeStudyMutation=await page.evaluate(()=>({...window.__TMS60_APP_BRIDGE_STATS__}));
   const mutationStart=Date.now();
   await frame.evaluate(()=>{
     const root=document.getElementById('view-study');

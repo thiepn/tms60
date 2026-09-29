@@ -115,7 +115,9 @@ for(const [id,short] of versions){
 }
 
 async function setUiLanguage(lang){
-  await frame.waitForSelector('#ui-language-select',{timeout:10000});
+  // Bible-version switches can briefly replace the Settings card while the
+  // bridge self-heals it. Require convergence to exactly one selector.
+  await frame.waitForFunction(()=>document.querySelectorAll('#ui-language-select').length===1,null,{timeout:10000});
   await frame.locator('#ui-language-select').evaluate((select,value)=>{
     select.value=value;
     select.dispatchEvent(new Event('change',{bubbles:true}));
