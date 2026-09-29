@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 
 const targets=[
-  ['tms60','https://thiepn.dev/tms60/'],
+  ['tms60','http://127.0.0.1:4173/tms60/'],
   ['diet','https://thiepn.dev/diet/']
 ];
 
