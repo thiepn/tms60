@@ -38,7 +38,7 @@ function makeState(marker='local',epoch=1){
 
 function keyOf(userId,translationId){return `${userId}|${translationId}`}
 
-function createFakeSupabase({db,sessionRef,clientOptionsRef,exchangeCalls,oauthStarts,rpcCalls}){
+function createFakeSupabase({db,sessionRef,clientOptionsRef,exchangeCalls,oauthStarts,oauthOptions,rpcCalls}){
   function rowsFor(table){
     if(table==='tms60_sync_state')return [...db.sync.values()];
     if(table==='tms60_backups')return db.backups;
@@ -168,7 +168,8 @@ function createFakeSupabase({db,sessionRef,clientOptionsRef,exchangeCalls,oauthS
       return {
         auth:{
           async getSession(){return {data:{session:sessionRef.value},error:null}},
-          async signInWithOAuth(){
+          async signInWithOAuth(request){
+            oauthOptions.push(request);
             const flowId='flow-start';
             options.auth.storage.setItem(`sb-hycegznamzjhwinegaai-auth-token-flow-${flowId}-code-verifier`,'verifier/start');
             options.auth.storage.setItem('sb-hycegznamzjhwinegaai-auth-token-code-verifier','verifier/start');
@@ -215,6 +216,7 @@ function createRuntime({
   const listeners=new Map();
   const exchangeCalls=[];
   const oauthStarts=[];
+  const oauthOptions=[];
   const rpcCalls=[];
   const sessionRef={value:session};
   const clientOptionsRef={value:null};
@@ -301,7 +303,7 @@ function createRuntime({
   };
   context.window=context;
   context.top=topWindow;
-  context.supabase=createFakeSupabase({db,sessionRef,clientOptionsRef,exchangeCalls,oauthStarts,rpcCalls});
+  context.supabase=createFakeSupabase({db,sessionRef,clientOptionsRef,exchangeCalls,oauthStarts,oauthOptions,rpcCalls});
 
   vm.createContext(context);
   vm.runInContext(source,context,{filename:'account-sync.js'});
@@ -332,7 +334,7 @@ function createRuntime({
     return {button,...flags};
   }
 
-  return {context,db,localStorage,sessionStorage,sessionRef,clientOptionsRef,exchangeCalls,oauthStarts,rpcCalls,assigned,replaced,dispatchClick,dispatchResetAll};
+  return {context,db,localStorage,sessionStorage,sessionRef,clientOptionsRef,exchangeCalls,oauthStarts,oauthOptions,rpcCalls,assigned,replaced,dispatchClick,dispatchResetAll};
 }
 
 test('PKCE callback uses explicit flow id across the srcdoc iframe boundary',async()=>{
@@ -363,6 +365,23 @@ test('Google sign-in preserves PKCE verifier recovery state before navigation',a
   const backup=JSON.parse(runtime.sessionStorage.getItem('tms60-pkce-verifier-backup-v1'));
   assert.ok(Object.keys(backup.entries).some(key=>key.endsWith('-code-verifier')));
   assert.match(runtime.assigned[0],/^https:\/\/hycegznamzjhwinegaai\.supabase\.co\/auth\/v1\/authorize/);
+});
+
+
+test('dedicated TMS60 origin uses the trusted callback relay',async()=>{
+  const prefs=JSON.stringify({autoSync:false,deviceId:'device-test',lastSyncByTranslation:{},boundUserByTranslation:{}});
+  const runtime=createRuntime({
+    href:'https://tms60.thiepn.dev/',
+    initialLocal:{'tms60-account-sync-prefs-v1':prefs}
+  });
+  await wait();
+
+  await runtime.context.TMS60Account.signInGoogle();
+  assert.equal(runtime.oauthOptions[0]?.provider,'google');
+  assert.equal(runtime.oauthOptions[0]?.options?.redirectTo,'https://thiepn.dev/tms60/?tms60_auth=1');
+  assert.equal(runtime.sessionStorage.getItem('tms60-pkce-flow-v1'),'flow-start');
+  const backup=JSON.parse(runtime.sessionStorage.getItem('tms60-pkce-verifier-backup-v1'));
+  assert.ok(Object.keys(backup.entries).some(key=>key.endsWith('-code-verifier')));
 });
 
 test('same account stores independent ESV and NIV cloud states',async()=>{

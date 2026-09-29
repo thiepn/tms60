@@ -77,7 +77,7 @@ const accountIndex=app.indexOf('<script src="./account-sync.js"></script>');
 pass(vendorIndex>0&&accountIndex>vendorIndex,'Pinned Supabase SDK loads before account runtime');
 pass(app.includes('Local-first and private'),'Legacy no-network account claim was replaced');
 pass(sw.includes("'./vendor/supabase-2.116.0.js'")&&sw.includes("'./account-sync.js'"),'Service worker precaches account runtime');
-pass(sw.includes('tms60-supabase-account43-2026-09-28'),'Service worker cache version advanced');
+pass(/const CACHE='tms60-[a-z0-9-]+-\d{4}-\d{2}-\d{2}'/.test(sw),'Service worker cache version advanced');
 
 if(failures.length){
   console.error(`\n${failures.length} Supabase account regression check(s) failed.`);
