@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 
 const targets=[
-  ['tms60','http://127.0.0.1:4173/'],
+  ['tms60','https://tms60.thiepn.dev/'],
   ['diet','https://thiepn.dev/diet/']
 ];
 
@@ -11,6 +11,12 @@ try{
   for(const [name,url] of targets){
     const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
     const page=await context.newPage();
+    await page.addInitScript(()=>{
+      window.__pwaInstallEvent={fired:false};
+      window.addEventListener('beforeinstallprompt',event=>{
+        window.__pwaInstallEvent={fired:true,platforms:event.platforms||[],hasPrompt:typeof event.prompt==='function'};
+      });
+    });
     const responses=[];
     const consoleMessages=[];
     page.on('console',message=>consoleMessages.push({type:message.type(),text:message.text()}));
@@ -30,7 +36,11 @@ try{
       return {
         controlled:Boolean(navigator.serviceWorker?.controller),
         registrations:regs.map(reg=>({scope:reg.scope,active:reg.active?.scriptURL||'',waiting:reg.waiting?.scriptURL||'',installing:reg.installing?.scriptURL||''})),
-        manifestHref:document.querySelector('link[rel="manifest"]')?.href||''
+        manifestHref:document.querySelector('link[rel="manifest"]')?.href||'',
+        installEvent:window.__pwaInstallEvent||null,
+        location:location.href,
+        baseURI:document.baseURI,
+        scripts:[...document.scripts].map(script=>script.src).filter(Boolean)
       };
     });
 
@@ -53,7 +63,7 @@ try{
       if(!manifest.url)failed=true;
       if((manifest.errors||[]).some(error=>error.critical))failed=true;
       if((installability.installabilityErrors||[]).length)failed=true;
-      const expectedScope='http://127.0.0.1:4173/';
+      const expectedScope='https://tms60.thiepn.dev/';
       if(!registration.registrations.some(reg=>reg.scope===expectedScope&&reg.active===expectedScope+'sw.js'))failed=true;
       if(registration.registrations.some(reg=>reg.scope.includes('/tms60/')))failed=true;
       if(consoleMessages.some(message=>/\/tms60\/sw\.js|service worker registration failed/i.test(message.text)))failed=true;
