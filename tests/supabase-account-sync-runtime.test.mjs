@@ -354,6 +354,22 @@ test('PKCE callback uses explicit flow id across the srcdoc iframe boundary',asy
   assert.ok(!runtime.replaced[0].includes('tms60_auth='));
 });
 
+test('explicit first-time OAuth login links local progress and auto-syncs',async()=>{
+  const db={sync:new Map(),backups:[],apps:[]};
+  const prefs=JSON.stringify({autoSync:true,deviceId:'device-test',lastSyncByTranslation:{},boundUserByTranslation:{}});
+  const runtime=createRuntime({
+    href:'https://thiepn.dev/tms60/?tms60_auth=1&code=good&sb_flow_id=flow-callback',
+    initialLocal:{'tms60-account-sync-prefs-v1':prefs},
+    db
+  });
+  await wait(80);
+
+  assert.ok(db.sync.has('user-a|esv'),'explicit first login should immediately create/sync the cloud state');
+  const saved=JSON.parse(runtime.localStorage.getItem('tms60-account-sync-prefs-v1'));
+  assert.equal(saved.boundUserByTranslation.esv,'user-a','first login should persist the translation/account binding');
+  assert.ok(Number(saved.lastSyncByTranslation.esv)>0,'first login should record a successful sync timestamp');
+});
+
 test('Google sign-in preserves PKCE verifier recovery state before navigation',async()=>{
   const prefs=JSON.stringify({autoSync:false,deviceId:'device-test',lastSyncByTranslation:{},boundUserByTranslation:{}});
   const runtime=createRuntime({initialLocal:{'tms60-account-sync-prefs-v1':prefs}});
