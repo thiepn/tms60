@@ -815,12 +815,26 @@
     try{topWindow.history.replaceState({},topWindow.document?.title||document.title,clean)}catch(_){}
   }
 
-  async function activateSession(nextSession,{sync=true}={}){
+  async function activateSession(nextSession,{sync=true,allowFirstBinding=false}={}){
     applySession(nextSession||null);
     if(!signedIn()){
       accountMismatch=false;
       setAccountStatus('local','Local-only mode');
       return;
+    }
+    // An explicit OAuth sign-in is the user's consent to connect this local
+    // TMS60 translation to the chosen THIEPN Account. Bind it immediately on
+    // the first successful login so the initial sync is frictionless. Passive
+    // discovery of a shared browser session remains guarded, and switching to
+    // a different previously-bound account still requires explicit action.
+    if(allowFirstBinding&&bindingIssue()==='unbound-local'){
+      if(!setBoundUser(session.user.id)){
+        accountMismatch=true;
+        setAccountStatus('error','The first-login account link could not be saved. Cloud sync remains blocked until browser storage works again.');
+        await markAppUsed();
+        return;
+      }
+      accountMismatch=false;
     }
     if(!ensureAccountBinding()){
       setAccountStatus('error',bindingBlockMessage());
@@ -838,7 +852,7 @@
       const callbackHandled=await processAuthCallback();
       const {data,error}=await client.auth.getSession();
       if(error)throw error;
-      await activateSession(data.session||null,{sync:true});
+      await activateSession(data.session||null,{sync:true,allowFirstBinding:callbackHandled});
       if(callbackHandled)toast('Signed in to THIEPN Account.');
     }catch(error){
       const message=accountErrorMessage(error);
