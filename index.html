@@ -92,6 +92,7 @@ h1{margin:22px 0 7px;font-size:clamp(1.65rem,4vw,2.15rem);line-height:1.08;lette
   </div>
 </div>
 <script src="translations.js"></script>
+<script src="hub-entry.js"></script>
 <script src="p2-5-source-prep.js"></script>
 <script>
 'use strict';
@@ -258,17 +259,20 @@ finish.addEventListener('click',async()=>{
 
 (async()=>{
   selected=readStoredTheme();saveTheme();
-  const preferredVersion=readActiveVersion();
+  const hubEntry=window.TMSHubEntry?.parse(location.hash);
+  if(location.hash.startsWith('#hub='))history.replaceState(null,'',location.pathname+location.search);
+  const preferredVersion=hubEntry?.translation??readActiveVersion();
   activeVersion=preferredVersion;selectedVersion=preferredVersion;syncChoices();
-  try{await loadVersion(preferredVersion)}catch(error){
+  try{await loadVersion(preferredVersion,{persist:!hubEntry});if(hubEntry&&activeVersion===hubEntry.translation)frame.contentWindow.TMSOpenHubEntry?.(hubEntry.verseId,hubEntry.dimension);}catch(error){
     console.error(error);
+    if(hubEntry){boot.textContent='The requested translation could not be loaded. Open TMS60 and select that translation to continue.';showNotice('Your Hub verse was not opened in another translation.','error',8000);return;}
     showNotice(`Could not load ${getVersion(preferredVersion).name}; using ESV temporarily. Your saved Bible version will be retried automatically.`,'error',8000);
     try{
       await loadVersion('esv',{persist:false});
       saveActiveVersion(preferredVersion);
     }catch(fallback){boot.textContent='TMS 60 could not be loaded.';console.error(fallback);return}
   }
-  if(!onboardingSeen())openOnboarding();
+  if(!hubEntry&&!onboardingSeen())openOnboarding();
 })();
 </script>
 <script src="p2-5-shell-runtime.js"></script>
