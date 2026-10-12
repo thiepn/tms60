@@ -163,13 +163,14 @@ try{
   const updateHarness=makeServiceWorkerHarness(source,expectedCache,{failedPath:'./icon-512.png',oldFallback:true,httpFailure:true});
   let updateInstallError='';
   try{await updateHarness.install()}catch(error){updateInstallError=String(error?.stack||error)}
-  const updateStore=updateHarness.stores.get(expectedCache)||new Map();
-  const fallbackResponse=updateStore.get(updateHarness.normalize('./icon-512.png'));
-  const fallbackText=fallbackResponse?await fallbackResponse.clone().text():'';
-  check(!updateInstallError,'Update install survives one HTTP precache failure',updateInstallError);
-  check(updateHarness.skipWaitingCalled,'Update resilient install still reaches skipWaiting');
-  check(fallbackText==='old-cache:./icon-512.png','Failed update asset is copied from previous TMS cache',fallbackText);
-  check(updateStore.has(updateHarness.normalize('./index.html'))&&updateStore.has(updateHarness.normalize('./app.html')),'Successful update assets still refresh normally',String(updateStore.size));
+  const updateStore=updateHarness.stores.get(expectedCache);
+  const previousName=[...updateHarness.stores.keys()].find(name=>name.startsWith('tms60-')&&name!==expectedCache);
+  const preserved=previousName?updateHarness.stores.get(previousName)?.get(updateHarness.normalize('./icon-512.png')):null;
+  const fallbackText=preserved?await preserved.clone().text():'';
+  check(updateInstallError.includes('Incomplete TMS60 update'),'Incomplete update is rejected rather than activated',updateInstallError);
+  check(!updateHarness.skipWaitingCalled,'Failed update cannot take over the existing client');
+  check(fallbackText==='old-cache:./icon-512.png','Previous offline cache remains intact',fallbackText);
+  check(!updateStore,'Incomplete candidate cache is discarded instead of mixing old and new files');
 
   await page.goto(APP,{waitUntil:'domcontentloaded',timeout:25000});
   await frameOf(page);
