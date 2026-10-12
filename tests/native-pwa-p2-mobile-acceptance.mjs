@@ -22,6 +22,7 @@ async function openMobile(width,standalone=false,shortcut=''){
   await ctx.addInitScript(({standalone})=>{
     try{
       localStorage.setItem('tms60-onboarding-v2','1');
+      localStorage.setItem('tms60-onboarding-v3','1');
       localStorage.setItem('tms60-ui-language-v1','en');
       localStorage.setItem('tms60-active-translation-v1','esv');
     }catch(_){}
