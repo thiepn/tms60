@@ -1,0 +1,48 @@
+name: PWA P2 candidate acceptance (no deployment)
+on:
+  push:
+    branches: [feature/native-pwa-p2-android-acceptance]
+    paths:
+      - 'native-pwa.js'
+      - 'sw.js'
+      - 'index.html'
+      - 'app.html'
+      - 'manifest.webmanifest'
+      - 'tests/native-pwa-*.mjs'
+      - 'tests/pwa-install-metadata-regression.mjs'
+      - '.github/workflows/native-pwa-p2-candidate.yml'
+permissions:
+  contents: read
+jobs:
+  node-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node tests/native-pwa-offline-regression.mjs
+      - run: node tests/native-pwa-p2-update-safety.mjs
+      - run: node tests/pwa-install-metadata-regression.mjs
+  chromium-mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Serve only candidate files on local HTTP
+        run: |
+          nohup python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/tms60-p2.log 2>&1 &
+          for i in {1..30}; do
+            curl --fail --silent http://127.0.0.1:4173/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/tms60-p2.log
+          exit 1
+      - run: node tests/native-pwa-p2-mobile-acceptance.mjs
