@@ -1,0 +1,82 @@
+name: PWA P3 local candidate and Android-style acceptance (no deployment)
+on:
+  push:
+    branches: [feature/native-pwa-p3-device-release-readiness]
+    paths:
+      - 'sw.js'
+      - 'native-pwa.js'
+      - 'index.html'
+      - 'app.html'
+      - 'manifest.webmanifest'
+      - 'tests/native-pwa-*.mjs'
+      - 'tests/pwa-install-metadata-regression.mjs'
+      - 'docs/pwa-p3-android-device-acceptance.md'
+      - '.github/workflows/native-pwa-p3-candidate.yml'
+permissions:
+  contents: read
+jobs:
+  static-and-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: PWA consistency and existing regressions
+        run: |
+          node tests/native-pwa-offline-regression.mjs
+          node tests/native-pwa-p2-update-safety.mjs
+          node tests/native-pwa-p3-shell-consistency.mjs
+          node tests/pwa-install-metadata-regression.mjs
+      - name: Install disposable Chromium runner
+        run: |
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Serve exact branch candidate locally (never production)
+        run: |
+          nohup python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/tms60-p3-candidate.log 2>&1 &
+          for i in {1..30}; do
+            curl --fail --silent http://127.0.0.1:4173/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/tms60-p3-candidate.log
+          exit 1
+      - name: Synthetic Android-like Chromium acceptance
+        run: node tests/native-pwa-p2-mobile-acceptance.mjs
+      - name: Package static candidate with integrity checks, no CNAME, no secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          SITE="$RUNNER_TEMP/tms60-p3-preview"
+          mkdir -p "$SITE/vendor"
+          cp index.html app.html manifest.webmanifest sw.js favicon.svg icon-192.png icon-512.png niv-service.json "$SITE/"
+          cp ./*.js "$SITE/"
+          cp vendor/supabase-2.116.0.js "$SITE/vendor/"
+          printf '%s\n' "$GITHUB_SHA" > "$SITE/SOURCE-COMMIT.txt"
+          cat > "$SITE/PREVIEW-ONLY.txt" <<'EOF'
+          TMS60 P3 REVIEW PACKAGE - NOT A DEPLOYMENT
+          Contains public static files only. No CNAME, credentials or database migrations.
+          Verify SHA256SUMS before use. Serve files at origin root on localhost:4173.
+          Android Chrome WebAPK testing requires separately approved HTTPS staging.
+          This archive is not physical-device acceptance or production release approval.
+          EOF
+          (
+            cd "$SITE"
+            find . -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > SHA256SUMS
+            sha256sum -c SHA256SUMS
+            test ! -e CNAME
+            test ! -d .github
+            test ! -d supabase
+            test ! -d worker
+            test ! -d tests
+            test ! -e .env
+          )
+          echo "P3_CANDIDATE_DIR=$SITE" >> "$GITHUB_ENV"
+      - name: Attach separately reviewable candidate artifact (NOT deploy)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tms60-p3-candidate-static-site
+          path: ${{ env.P3_CANDIDATE_DIR }}
+          retention-days: 14
+          if-no-files-found: error

@@ -10,7 +10,7 @@ const origin='https://tms60.example.test/';
 const cacheName=sw.match(/const CACHE='([^']+)'/)?.[1];
 const core=JSON.parse('['+sw.match(/const CORE=\[([^\]]+)\]/)?.[1].replaceAll("'",'"')+']');
 const normalize=input=>new URL(input instanceof Request?input.url:String(input),origin).href;
-assert.ok(cacheName?.startsWith('tms60-native-pwa-p2-'));
+assert.match(cacheName||'',/^tms60-native-pwa-(?:p2|p3)-\d{4}-\d{2}-\d{2}$/);
 assert.ok(core.includes('./native-pwa.js'));
 assert.equal(manifest.display,'standalone');
 assert.equal(manifest.id,'/');
