@@ -22,6 +22,9 @@ assert.equal(manifest.display,'standalone');
 assert.equal(manifest.start_url,'/');
 assert.equal(manifest.id,'/');
 assert.equal(manifest.scope,'/');
+assert.deepEqual(manifest.shortcuts.map(item=>item.url),['/?tmsView=study','/?tmsView=progress']);
+assert.match(native, /searchParams\.get\('tmsView'\)/);
+assert.match(fs.readFileSync('app.html','utf8'), /safe-area-inset-bottom/);
 new vm.Script(native,{filename:'native-pwa.js'});
 
 const storeMap=new Map();
