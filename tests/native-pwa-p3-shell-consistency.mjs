@@ -50,7 +50,7 @@ const makeEvent=(type,attrs={})=>{
 await makeEvent('install').pending;
 const cache=stores.get(cacheName);
 assert.equal(cache.size,core.length,'The initial install provides the complete bundle');
-assert.ok((await cache.get(scope+'app.html').text()).startsWith('v1:'));
+assert.ok((await cache.get(scope+'app.html').clone().text()).startsWith('v1:'));
 
 generation='v2'; // Simulate a server deploying a later candidate mid-session.
 const beforeCount=fetchCount;
@@ -71,14 +71,14 @@ assert.ok((await index.text()).startsWith('v1:'),'Installed index.html stays on 
 const icon=await get('icon-192.png?v=older');
 assert.ok((await icon.text()).startsWith('v1:'),'Icon query cannot bypass pinned precache');
 assert.equal(fetchCount,beforeCount,'Core routes cannot refetch and poison active installed bundle');
-const stillCached=await cache.get(scope+'app.html').text();
+const stillCached=await cache.get(scope+'app.html').clone().text();
 assert.ok(stillCached.startsWith('v1:'),'Old shell remains intact after server update');
 
 // Install metadata is intentionally network-first so browsers can inspect fresh
 // metadata without mutating the pinned JavaScript/HTML cache.
 const manifest=await get('manifest.webmanifest?v=1');
 assert.ok((await manifest.text()).startsWith('v2:'),'Manifest refresh remains network-first');
-assert.ok((await cache.get(scope+'app.html').text()).startsWith('v1:'));
+assert.ok((await cache.get(scope+'app.html').clone().text()).startsWith('v1:'));
 
 const dynamic=await get('runtime-generated.json');
 assert.ok((await dynamic.text()).startsWith('v2:'),'Non-core resources remain online-capable');
