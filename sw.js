@@ -1,5 +1,5 @@
 'use strict';
-const CACHE='tms60-native-pwa-2026-10-13';
+const CACHE='tms60-native-pwa-p2-2026-10-13';
 const CORE=['./','./index.html','./app.html','./translations.js','./hub-entry.js','./p2-5-source-prep.js','./p2-5-shell-runtime.js','./p2-6-theme-sync.js','./native-pwa.js','./runtime-translation-switch.js','./p2-8-localized-tts-reference.js','./niv-service.json','./enhancements.js','./enhancements-legacy.js','./rc3-hardening.js','./language-switch-hardening.js','./guided-learning-chain.js','./qol-fast-recall.js','./qol-cloze-helpers.js','./qol-word-navigation.js','./ux-patch.js','./ux-patch-core.js','./typo-tolerance.js','./typo-scoring-finalizer.js','./enhancements-core.js','./localization-runtime.js','./localization-completion.js','./favicon.svg','./icon-192.png','./icon-512.png','./vendor/supabase-2.116.0.js','./account-sync.js','./manifest.webmanifest'];
 const STATIC_ASSETS=new Set(['./favicon.svg','./icon-192.png','./icon-512.png'].map(url=>new URL(url,self.location.href).pathname));
 const MANIFEST_PATH=new URL('./manifest.webmanifest',self.location.href).pathname;
@@ -17,7 +17,15 @@ async function cachedResponse(request){
 function networkFirst(request,event,{navigation=false}={}){
   const network=fetch(new Request(request,{cache:'no-cache'}));
   event.waitUntil(network.then(response=>cacheSuccessful(request,response)).catch(()=>{}));
-  return network.catch(async()=>{
+  return network.then(async response=>{
+    // A reachable server can still be temporarily broken. Prefer a known-good
+    // cached dependency over a transient 5xx response without caching the error.
+    if(response.status>=500){
+      const hit=await cachedResponse(request);
+      if(hit)return hit;
+    }
+    return response;
+  }).catch(async()=>{
     const hit=await cachedResponse(request);
     if(hit)return hit;
     if(navigation){
@@ -75,19 +83,32 @@ async function precacheAsset(cache,url){
 
 self.addEventListener('install',event=>{
   event.waitUntil((async()=>{
+    const previousNames=(await caches.keys()).filter(name=>name!==CACHE&&name.startsWith('tms60-'));
+    const isUpdate=previousNames.length>0;
     const cache=await caches.open(CACHE);
     const results=await Promise.allSettled(CORE.map(url=>precacheAsset(cache,url)));
     const unavailable=results.filter(result=>result.status==='rejected'||result.value?.source==='missing');
     if(unavailable.length)console.warn(`TMS60 precache completed with ${unavailable.length} unavailable asset(s); runtime caching will retry them.`);
+    // Never replace a working offline version with an incomplete/mixed-version update.
+    // A first install can still start online and repair missing files via Settings.
+    const unverifiedUpdate=isUpdate&&results.some(result=>
+      result.status==='rejected'||result.value?.source!=='network');
+    if(unverifiedUpdate){
+      await caches.delete(CACHE);
+      throw new Error('Incomplete TMS60 update: previous offline version preserved.');
+    }
 
     const shell=(await cache.match(new Request(new URL('./index.html',self.location.href))))
       ||(await cache.match(new Request(new URL('./',self.location.href))));
     if(!shell)throw new Error('TMS60 precache could not preserve any usable app shell.');
 
-    await self.skipWaiting();
+    // On an update, the incumbent app stays on its own worker and cache until all
+    // windows close. A first install may claim the already-loaded page immediately.
+    if(!isUpdate)await self.skipWaiting();
   })());
 });
 self.addEventListener('activate',event=>{
+  // Delayed activation means no old-version client remains to be disrupted.
   event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE&&k.startsWith('tms60-')).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));
 });
 self.addEventListener('fetch',event=>{
