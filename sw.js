@@ -1,5 +1,5 @@
 'use strict';
-const CACHE='tms60-h15-hub-entry-2026-10-03';
+const CACHE='tms60-native-pwa-2026-10-13';
 const CORE=['./','./index.html','./app.html','./translations.js','./hub-entry.js','./p2-5-source-prep.js','./p2-5-shell-runtime.js','./p2-6-theme-sync.js','./runtime-translation-switch.js','./p2-8-localized-tts-reference.js','./niv-service.json','./enhancements.js','./enhancements-legacy.js','./rc3-hardening.js','./language-switch-hardening.js','./guided-learning-chain.js','./qol-fast-recall.js','./qol-cloze-helpers.js','./qol-word-navigation.js','./ux-patch.js','./ux-patch-core.js','./typo-tolerance.js','./typo-scoring-finalizer.js','./enhancements-core.js','./localization-runtime.js','./localization-completion.js','./favicon.svg','./icon-192.png','./icon-512.png','./vendor/supabase-2.116.0.js','./account-sync.js','./manifest.webmanifest'];
 const STATIC_ASSETS=new Set(['./favicon.svg','./icon-192.png','./icon-512.png'].map(url=>new URL(url,self.location.href).pathname));
 const MANIFEST_PATH=new URL('./manifest.webmanifest',self.location.href).pathname;
@@ -98,4 +98,36 @@ self.addEventListener('fetch',event=>{
   if(url.pathname===MANIFEST_PATH){event.respondWith(networkFirst(req,event));return}
   if(STATIC_ASSETS.has(url.pathname)){event.respondWith(cacheFirst(req));return}
   event.respondWith(networkFirst(req,event));
+});
+
+
+// A user-initiated, verifiable offline-readiness check. A successful install
+// alone is insufficient: one missing dependency can make offline study fail.
+async function offlineBundleStatus(cache) {
+  const checks=await Promise.all(CORE.map(async url=>{
+    try {
+      const req=new Request(new URL(url,self.location.href));
+      return {url,present:Boolean(await cache.match(req))};
+    } catch (_) { return {url,present:false}; }
+  }));
+  const missing=checks.filter(item=>!item.present).map(item=>item.url);
+  return {ok:true,ready:missing.length===0,cached:checks.length-missing.length,total:checks.length,missing};
+}
+
+self.addEventListener('message',event=>{
+  const type=event.data?.type;
+  const port=event.ports?.[0];
+  if(!port||!['TMS60_OFFLINE_STATUS','TMS60_PREPARE_OFFLINE'].includes(type))return;
+  event.waitUntil((async()=>{
+    try {
+      const cache=await caches.open(CACHE);
+      if(type==='TMS60_PREPARE_OFFLINE'){
+        const before=await offlineBundleStatus(cache);
+        await Promise.allSettled(before.missing.map(url=>precacheAsset(cache,url)));
+      }
+      port.postMessage(await offlineBundleStatus(cache));
+    }catch(error){
+      port.postMessage({ok:false,error:String(error?.message||error)});
+    }
+  })());
 });
