@@ -39,7 +39,7 @@ async function openMobile(width,standalone=false,shortcut=''){
   await page.goto(BASE+shortcut,{waitUntil:'domcontentloaded',timeout:30000});
   await page.locator('#app-frame.ready').waitFor({timeout:30000});
   const child=page.frameLocator('#app-frame');
-  await child.locator('#desktop-nav').waitFor({timeout:30000});
+  await child.locator('#desktop-nav').waitFor({state:'attached',timeout:30000});
   await child.locator('#native-pwa-card').waitFor({timeout:10000});
   return {ctx,page,child,errors};
 }
