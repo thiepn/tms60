@@ -35,5 +35,33 @@
       "type": "image/svg+xml",
       "purpose": "any"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Start memorizing",
+      "short_name": "Study",
+      "description": "Go directly to verse practice",
+      "url": "/?tmsView=study",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Review progress",
+      "short_name": "Progress",
+      "description": "See completed verses and due reviews",
+      "url": "/?tmsView=progress",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }
