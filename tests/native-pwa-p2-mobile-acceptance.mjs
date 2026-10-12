@@ -112,7 +112,7 @@ try{
   await page.reload({waitUntil:'domcontentloaded',timeout:30000});
   await page.locator('#app-frame.ready').waitFor({timeout:30000});
   const offlineChild=page.frameLocator('#app-frame');
-  await offlineChild.locator('#view-study').waitFor({timeout:15000});
+  await offlineChild.locator('#view-study').waitFor({state:'attached',timeout:15000});
   const persisted=await offlineChild.locator('html').evaluate(()=>state.progress[1].stage);
   check('Offline restart preserves actual verse progress',persisted===2,JSON.stringify({persisted}));
   await offlineChild.locator('.mobile-nav [data-view="study"]').click();
