@@ -23,6 +23,7 @@
   let hadController = Boolean(navigator.serviceWorker?.controller);
   let updatedController = false;
   let messageSerial = 0;
+  let busy = false;
 
   function currentView() {
     const view = frame.contentDocument?.documentElement?.dataset.view;
@@ -91,7 +92,8 @@
     element.setAttribute('data-error', error ? '1' : '0');
   }
 
-  function setBusy(busy) {
+  function setBusy(value) {
+    busy = Boolean(value);
     const card = getCard();
     if (!card) return;
     for (const button of card.querySelectorAll('[data-native-pwa-action]')) button.disabled = busy;
@@ -134,7 +136,7 @@
 
   async function refreshOfflineStatus() {
     const serial = ++messageSerial;
-    if (!getCard()) return;
+    if (!getCard() || busy) return;
     if (!isSecureContext || !('serviceWorker' in navigator)) {
       say('Offline installation is unavailable in this browser or insecure context.', true);
       return;
@@ -143,12 +145,13 @@
       const result = await requestWorker('TMS60_OFFLINE_STATUS');
       if (serial !== messageSerial) return;
       const network = navigator.onLine ? 'Online' : 'Offline';
+      const update = updatedController ? ' · Update ready; reopen after studying.' : '';
       if (result.ready) {
         say(network + ' · Offline bundle ready (' + result.cached + '/' + result.total +
-          ' files). Bundled ESV practice can run without internet.');
+          ' files). Bundled ESV practice can run without internet.' + update);
       } else {
         say(network + ' · ' + result.cached + '/' + result.total +
-          ' files cached. Use Prepare offline access to complete installation.', true);
+          ' files cached. Use Prepare offline access to complete installation.' + update, true);
       }
     } catch (error) {
       if (serial === messageSerial) say(error.message, true);
@@ -156,6 +159,7 @@
   }
 
   async function prepareOffline() {
+    ++messageSerial;
     setBusy(true);
     say('Preparing offline study files…');
     try {
