@@ -1,8 +1,15 @@
 'use strict';
-const CACHE='tms60-native-pwa-p2-2026-10-13';
+const CACHE='tms60-native-pwa-p3-2026-10-13';
 const CORE=['./','./index.html','./app.html','./translations.js','./hub-entry.js','./p2-5-source-prep.js','./p2-5-shell-runtime.js','./p2-6-theme-sync.js','./native-pwa.js','./runtime-translation-switch.js','./p2-8-localized-tts-reference.js','./niv-service.json','./enhancements.js','./enhancements-legacy.js','./rc3-hardening.js','./language-switch-hardening.js','./guided-learning-chain.js','./qol-fast-recall.js','./qol-cloze-helpers.js','./qol-word-navigation.js','./ux-patch.js','./ux-patch-core.js','./typo-tolerance.js','./typo-scoring-finalizer.js','./enhancements-core.js','./localization-runtime.js','./localization-completion.js','./favicon.svg','./icon-192.png','./icon-512.png','./vendor/supabase-2.116.0.js','./account-sync.js','./manifest.webmanifest'];
 const STATIC_ASSETS=new Set(['./favicon.svg','./icon-192.png','./icon-512.png'].map(url=>new URL(url,self.location.href).pathname));
 const MANIFEST_PATH=new URL('./manifest.webmanifest',self.location.href).pathname;
+// The installed worker owns an immutable offline shell. Online requests must
+// never silently overwrite precached code with a newer, partly deployed build.
+const ROOT_PATH=new URL('./',self.location.href).pathname;
+const PRECACHE_PATHS=new Set(CORE.filter(path=>path!=='./manifest.webmanifest').map(path=>new URL(path,self.location.href).pathname));
+function canonicalShellRequest(url){
+  return new Request(new URL(url.pathname,self.location.origin));
+}
 
 function cacheSuccessful(request,response){
   if(!response||!response.ok||response.type==='opaque')return Promise.resolve();
@@ -115,9 +122,15 @@ self.addEventListener('fetch',event=>{
   const req=event.request;if(req.method!=='GET')return;
   const url=new URL(req.url);if(url.origin!==location.origin)return;
   if(req.headers.has('range')){event.respondWith(fetch(req));return}
-  if(req.mode==='navigate'){event.respondWith(networkFirst(req,event,{navigation:true}));return}
+  if(req.mode==='navigate'){
+    if(url.pathname===ROOT_PATH||PRECACHE_PATHS.has(url.pathname)){
+      event.respondWith(cacheFirst(canonicalShellRequest(url)));return;
+    }
+    event.respondWith(networkFirst(req,event,{navigation:true}));return;
+  }
   if(url.pathname===MANIFEST_PATH){event.respondWith(networkFirst(req,event));return}
-  if(STATIC_ASSETS.has(url.pathname)){event.respondWith(cacheFirst(req));return}
+  if(STATIC_ASSETS.has(url.pathname)){event.respondWith(cacheFirst(canonicalShellRequest(url)));return}
+  if(PRECACHE_PATHS.has(url.pathname)){event.respondWith(cacheFirst(canonicalShellRequest(url)));return}
   event.respondWith(networkFirst(req,event));
 });
 
@@ -128,7 +141,8 @@ async function offlineBundleStatus(cache) {
   const checks=await Promise.all(CORE.map(async url=>{
     try {
       const req=new Request(new URL(url,self.location.href));
-      return {url,present:Boolean(await cache.match(req))};
+      const cached=await cache.match(req);
+      return {url,present:Boolean(cached&&cached.ok)};
     } catch (_) { return {url,present:false}; }
   }));
   const missing=checks.filter(item=>!item.present).map(item=>item.url);
