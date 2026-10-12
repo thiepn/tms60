@@ -24,6 +24,7 @@
   let updatedController = false;
   let messageSerial = 0;
   let busy = false;
+  let launcherShortcutHandled = false;
 
   function currentView() {
     const view = frame.contentDocument?.documentElement?.dataset.view;
@@ -267,6 +268,19 @@
     viewObserver.observe(doc.documentElement, { attributes: true, attributeFilter: ['data-view'] });
     if (standalone() && !history.state?.tms60PwaView)
       history.replaceState(historyState(currentView()), '', location.href);
+
+    // PWA icon long-press actions open a real view instead of merely changing the URL.
+    // Remove only our launcher parameter; never erase OAuth, Hub, or other URL state.
+    if (!launcherShortcutHandled) {
+      launcherShortcutHandled = true;
+      const target = new URL(location.href);
+      const requested = target.searchParams.get('tmsView');
+      if (requested !== null) {
+        target.searchParams.delete('tmsView');
+        history.replaceState(historyState(currentView()), '', target.pathname + target.search + target.hash);
+        if (VIEWS.has(requested) && requested !== currentView()) win.switchView(requested);
+      }
+    }
     void synchronizeWakeLock();
   }
 
