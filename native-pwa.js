@@ -22,6 +22,7 @@
   let restoringHistory = false;
   let hadController = Boolean(navigator.serviceWorker?.controller);
   let updatedController = false;
+  let updateWaiting = false;
   let messageSerial = 0;
   let busy = false;
   let launcherShortcutHandled = false;
@@ -146,7 +147,8 @@
       const result = await requestWorker('TMS60_OFFLINE_STATUS');
       if (serial !== messageSerial) return;
       const network = navigator.onLine ? 'Online' : 'Offline';
-      const update = updatedController ? ' · Update ready; reopen after studying.' : '';
+      const update = updateWaiting ? ' · Update pending; close all TMS60 windows to apply.' :
+        (updatedController ? ' · App version changed since opening; reopen after studying.' : '');
       if (result.ready) {
         say(network + ' · Offline bundle ready (' + result.cached + '/' + result.total +
           ' files). Bundled ESV practice can run without internet.' + update);
@@ -185,9 +187,29 @@
       const reg = await navigator.serviceWorker.getRegistration('/');
       if (!reg) throw new Error('Install the offline app first by reloading TMS60 online.');
       await reg.update();
-      say(updatedController
-        ? 'A newer version was downloaded. Reopen TMS60 after finishing your current study session.'
-        : 'Update check completed. Your current study session was not interrupted.');
+      // An update is deliberately left waiting instead of taking over active recall.
+      const installing=reg.installing;
+      if(installing && !reg.waiting) {
+        await Promise.race([
+          new Promise(resolve=>{
+            if(['installed','activated','redundant'].includes(installing.state))return resolve();
+            const onState=()=>{
+              if(['installed','activated','redundant'].includes(installing.state)){
+                installing.removeEventListener('statechange',onState);
+                resolve();
+              }
+            };
+            installing.addEventListener('statechange',onState);
+          }),
+          new Promise(resolve=>setTimeout(resolve,3000))
+        ]);
+      }
+      updateWaiting=Boolean(reg.waiting);
+      say(updateWaiting
+        ? 'Update downloaded and waiting safely. Finish studying, then close every TMS60 window and reopen the installed app.'
+        : installing && !['installed','redundant','activated'].includes(installing.state)
+          ? 'Update download is still in progress. Check again shortly; current study is uninterrupted.'
+          : 'Update check completed. Your current study session was not interrupted.');
     } catch (error) { say('Update check failed: ' + error.message, true); }
     finally { setBusy(false); }
   }
@@ -298,6 +320,19 @@
     void synchronizeWakeLock();
   });
 
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.ready.then(reg=>{
+      const inspect=()=>{updateWaiting=Boolean(reg.waiting);void refreshOfflineStatus();};
+      if(reg.waiting)inspect();
+      reg.addEventListener('updatefound',()=>{
+        const installing=reg.installing;
+        if(!installing)return;
+        installing.addEventListener('statechange',()=>{
+          if(installing.state==='installed')inspect();
+        });
+      });
+    }).catch(()=>{});
+  }
   addEventListener('online', () => { void refreshOfflineStatus(); });
   addEventListener('offline', () => { void refreshOfflineStatus(); });
   document.addEventListener('visibilitychange', () => { void synchronizeWakeLock(); });
