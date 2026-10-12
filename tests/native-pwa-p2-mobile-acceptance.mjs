@@ -40,7 +40,7 @@ async function openMobile(width,standalone=false,shortcut=''){
   await page.locator('#app-frame.ready').waitFor({timeout:30000});
   const child=page.frameLocator('#app-frame');
   await child.locator('#desktop-nav').waitFor({state:'attached',timeout:30000});
-  await child.locator('#native-pwa-card').waitFor({timeout:10000});
+  await child.locator('#native-pwa-card').waitFor({state:'attached',timeout:10000});
   return {ctx,page,child,errors};
 }
 try{
@@ -99,6 +99,7 @@ try{
   });
   check('Service worker controls candidate page',worker);
 
+  await child.locator('.mobile-nav [data-view="settings"]').click();
   const card=child.locator('#native-pwa-card');
   await card.locator('[data-native-pwa-action="prepare"]').click();
   await card.locator('[data-native-pwa-action="prepare"]').waitFor({state:'visible'});
@@ -113,9 +114,9 @@ try{
   await offlineChild.locator('#view-study').waitFor({timeout:15000});
   const persisted=await offlineChild.locator('html').evaluate(()=>state.progress[1].stage);
   check('Offline restart preserves actual verse progress',persisted===2,JSON.stringify({persisted}));
+  await offlineChild.locator('.mobile-nav [data-view="study"]').click();
   check('Offline Study remains usable',
-    await offlineChild.locator('#view-study').evaluate(e=>e.classList.contains('active')) ||
-    await offlineChild.locator('.mobile-nav [data-view="study"]').isVisible());
+    await offlineChild.locator('#view-study').evaluate(e=>e.classList.contains('active')));
   check('No uncaught page errors in mobile session',errors.length===0,errors.join(' | '));
   await app.ctx.setOffline(false);
   await app.ctx.close();
