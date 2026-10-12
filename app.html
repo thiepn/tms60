@@ -688,6 +688,13 @@ html[data-view="library"] #ambient-canvas{opacity:0;visibility:hidden}
 .char-detail{font-size:.8rem;color:var(--muted);padding-top:7px;border-top:1px solid var(--border)}
 .char-detail code{font:700 .92em ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--danger);background:var(--dangerSoft);border-radius:4px;padding:1px 4px}
 @media(max-width:480px){.char-line{grid-template-columns:1fr;gap:2px}.char-label{padding-top:0}.char-compare{padding:10px}.char-text{font-size:.96rem}}
+
+/* Installed mobile app: preserve readable controls around cutouts and gesture bars. */
+@media(max-width:760px){
+  .topbar-inner{padding-top:max(11px,env(safe-area-inset-top,0px))}
+  .mobile-nav{padding-bottom:max(8px,env(safe-area-inset-bottom,0px))}
+  .content{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))}
+}
 </style>
 </head>
 <body>
