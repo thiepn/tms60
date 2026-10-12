@@ -2,7 +2,7 @@
 
 <img width="100%" src="https://capsule-render.vercel.app/api?type=waving&height=220&color=0:071a12,45:0f5132,100:d7a84b&text=TMS%2060%20ESV%20Memory%20Lab&fontColor=ffffff&fontSize=42&fontAlignY=36&desc=Learn%20%E2%86%92%20Prove%20%E2%86%92%20Maintain&descAlignY=58&animation=fadeIn" alt="TMS 60 ESV Memory Lab banner">
 
-<a href="https://thiepn.github.io/tms60/">
+<a href="https://tms60.thiepn.dev/">
   <img src="https://img.shields.io/badge/%E2%96%B6%20%20LAUNCH%20TMS%2060%20MEMORY%20LAB-16a34a?style=for-the-badge&logo=googlechrome&logoColor=white" height="72" alt="Launch TMS 60 Memory Lab">
 </a>
 
@@ -50,21 +50,35 @@ It guides each verse through a structured progression:
 
 <div align="center">
 
-<a href="https://thiepn.github.io/tms60/">
+<a href="https://tms60.thiepn.dev/">
   <img src="https://img.shields.io/badge/OPEN%20THE%20APP%20NOW%20%E2%86%92-0f5132?style=for-the-badge&logo=bookstack&logoColor=white" height="60" alt="Open the app now">
 </a>
 
-**Live app:** [thiepn.github.io/tms60](https://thiepn.github.io/tms60/)
+**Live app:** [tms60.thiepn.dev](https://tms60.thiepn.dev/)
 
 </div>
 
+## Install as an app
+
+Open **https://tms60.thiepn.dev/** over HTTPS.
+
+- **Android / Chrome:** browser menu (⋮) → **Install app** or **Add to Home screen** → **Install**. Launch TMS60 from the new app icon for its standalone window.
+- **iPhone / Safari:** Share → **Add to Home Screen** → **Add**. Open from the installed icon.
+- **Desktop (supported browsers):** use the install icon in the browser address bar or the browser's app-install menu.
+
+In **Settings → Installed app & offline access**, use **Prepare offline access** and check that the full app bundle is ready before relying on offline study. This includes the bundled ESV edition; translations loaded from an external text source need their first download online. **Check for updates** does not automatically interrupt an active memorization session. The optional screen-awake switch affects the Study screen only.
+
+A PWA is an installable web app, not a compiled Android APK or iOS App Store application. Browser/OS support and install menu names vary.
+
 ## Run locally
 
-```text
-1. Download index.html
-2. Open it in a modern browser
-3. Start studying
+Serve the full repository over HTTP (do not open index.html as a file):
+
+```sh
+python3 -m http.server 4173
 ```
+
+Open http://localhost:4173. Localhost is accepted as a secure context for service workers; the production domain requires HTTPS. Keep the other JavaScript files, app.html, manifest, and assets alongside index.html.
 
 Your progress is always saved locally first. Use **Export Progress** for portable JSON backups, or optionally sign in to your shared THIEPN Account for Supabase-backed cross-device sync and private cloud recovery points.
 
