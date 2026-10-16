@@ -1,0 +1,56 @@
+name: Cloudflare Pages Migration Readiness (NO DEPLOY)
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staged-static-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source and migration regressions
+        run: |
+          node --check scripts/build-cloudflare-pages.mjs
+          node --check tests/cloudflare-pages-migration.test.mjs
+          node --check tests/cloudflare-pages-local-smoke.mjs
+          node --test tests/cloudflare-pages-migration.test.mjs
+          node tests/pwa-install-metadata-regression.mjs
+          node tests/supabase-account-sync-regression.mjs
+          node --test tests/supabase-account-sync-runtime.test.mjs
+      - name: Build public-only static artifact
+        run: |
+          node scripts/build-cloudflare-pages.mjs
+          test ! -e dist/CNAME
+          test ! -e dist/worker
+          test ! -e dist/supabase
+          test ! -e dist/.github
+          test -f dist/app.html
+          test -f dist/sw.js
+          test -f dist/manifest.webmanifest
+          (cd dist && find . -type f -print0 | sort -z | xargs -0 sha256sum)
+      - name: Locally test staged desktop and mobile Chromium
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+          nohup python3 -m http.server 4173 --bind 127.0.0.1 --directory dist >/tmp/tms60-cf-review.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          node tests/cloudflare-pages-local-smoke.mjs
+      - name: Upload non-deployed reviewer artifact only
+        uses: actions/upload-artifact@v4
+        with:
+          name: tms60-cloudflare-static-review
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
