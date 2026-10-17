@@ -24,7 +24,7 @@ for(const path of paths){
 
 function simulate({previous=false,tamper='',manifestTamper=false,manifestMissing=false}={}){
   const origin='https://stage.example.test/',handlers=new Map(),stores=new Map();
-  let skips=0;
+  let skips=0,activeTamper=tamper,offline=false;
   const norm=v=>new URL(v instanceof Request?v.url:String(v),origin).href;
   function getStore(name){
     if(!stores.has(name))stores.set(name,new Map());
@@ -38,6 +38,7 @@ function simulate({previous=false,tamper='',manifestTamper=false,manifestMissing
     stores.get('tms60-earlier-2026-10-01').set(origin+'index.html',new Response('PRIOR-SHELL'));
   }
   const fetch=async input=>{
+    if(offline)throw new TypeError('simulated network outage');
     const url=new URL(norm(input));
     if(url.pathname==='/tms60-integrity.json'){
       if(manifestMissing)return new Response('missing',{status:404});
@@ -45,14 +46,38 @@ function simulate({previous=false,tamper='',manifestTamper=false,manifestMissing
     }
     let name=url.pathname==='/'?'index.html':url.pathname.slice(1);
     if(!paths.includes(name))return new Response('Not found',{status:404});
-    const payload=tamper===name?Buffer.from('MISMATCH-BUT-HTTP-200'):readFileSync(join(root,name));
+    const payload=activeTamper===name?Buffer.from('MISMATCH-BUT-HTTP-200'):readFileSync(join(root,name));
     return new Response(payload,{status:200});
   };
   const self={location:new URL(origin+'sw.js'),addEventListener:(name,fn)=>handlers.set(name,fn),
     skipWaiting:async()=>{skips++},clients:{claim:async()=>{}}};
   vm.runInNewContext(sw,{self,location:self.location,caches,fetch,
     Request,Response,URL,Promise,console,crypto:webcrypto,TextDecoder},{filename:'staged-sw.js'});
-  return {stores,get skips(){return skips},async install(){
+  return {
+    stores,get skips(){return skips},
+    setTamper(next){activeTamper=next},
+    setOffline(next){offline=next},
+    async fetchPath(path){
+      let response;
+      handlers.get('fetch')({
+        request:new Request(new URL(path,origin)),
+        respondWith(next){response=Promise.resolve(next)},
+        waitUntil(){}
+      });
+      assert.ok(response,'Service worker did not handle '+path);
+      return response;
+    },
+    async message(type){
+      let reply;
+      let done;
+      handlers.get('message')({
+        data:{type},ports:[{postMessage(value){reply=value}}],
+        waitUntil(p){done=Promise.resolve(p)}
+      });
+      await done;
+      return reply;
+    },
+    async install(){
     let pending;
     handlers.get('install')({waitUntil(p){pending=Promise.resolve(p)}});
     assert.ok(pending,'No install promise');
@@ -62,7 +87,46 @@ function simulate({previous=false,tamper='',manifestTamper=false,manifestMissing
 const verified=simulate();
 await verified.install();
 assert.equal(verified.skips,1);
-assert.equal(verified.stores.get(cache).size,core.length);
+assert.equal(verified.stores.get(cache).size,core.length+1,
+  'Candidate cache includes CORE and its independently verified manifest');
+const staged=verified.stores.get(cache);
+assert.ok(staged.has('https://stage.example.test/tms60-integrity.json'));
+
+// A 200 OK response with bytes from a different rollout cannot refill a missing
+// installed code asset, including via the user-initiated offline repair flow.
+staged.delete('https://stage.example.test/app.html');
+verified.setTamper('app.html');
+const refused=await verified.fetchPath('app.html');
+assert.equal(refused.type,'error','Unverified cache miss must fail closed');
+assert.equal((await verified.message('TMS60_PREPARE_OFFLINE')).ready,false,
+  'Corrupt CDN response cannot repair the sealed PWA cache');
+assert.ok(!staged.has('https://stage.example.test/app.html'));
+
+verified.setTamper('');
+const repaired=await verified.message('TMS60_PREPARE_OFFLINE');
+assert.equal(repaired.ok,true);
+assert.equal(repaired.ready,true,'Valid asset bytes repair the missing CORE');
+assert.ok(staged.has('https://stage.example.test/app.html'));
+
+// A cached entry that was later corrupted must also be rejected at runtime.
+staged.set('https://stage.example.test/app.html',new Response('POISONED-CACHE'));
+verified.setTamper('app.html');
+assert.equal((await verified.message('TMS60_OFFLINE_STATUS')).ready,false);
+assert.equal((await verified.fetchPath('app.html')).type,'error',
+  'A corrupted cached asset cannot be served or refilled with mismatched bytes');
+verified.setTamper('');
+assert.equal((await verified.fetchPath('app.html')).ok,true,
+  'Validated recovery may replace corrupted cached bytes');
+verified.setOffline(true);
+assert.equal((await verified.message('TMS60_OFFLINE_STATUS')).ready,true,
+  'Verified manifest survives offline worker restarts and status checks');
+verified.setOffline(false);
+
+// Without its sealed manifest, even cached code must fail closed rather
+// than trusting an unauthenticated current-edge manifest.
+staged.delete('https://stage.example.test/tms60-integrity.json');
+assert.equal((await verified.fetchPath('app.html')).type,'error');
+assert.equal((await verified.message('TMS60_OFFLINE_STATUS')).ok,false);
 
 for(const variant of [{tamper:'app.html'},{manifestTamper:true},{manifestMissing:true}]){
   const scenario=simulate({previous:true,...variant});
@@ -75,4 +139,4 @@ const fullUpdate=simulate({previous:true});
 await fullUpdate.install();
 assert.equal(fullUpdate.skips,0);
 assert.ok(fullUpdate.stores.has(cache));
-console.log('PASS staged SHA-256 manifest: exact CORE; reject 200 mixed version, altered/missing manifest; safe previous-cache update');
+console.log('PASS staged integrity across install, restart, cache misses, offline repair, cache poison and prior-cache update');

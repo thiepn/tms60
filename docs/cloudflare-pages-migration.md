@@ -182,3 +182,80 @@ Git-linked production publication starts unexpectedly.
   and genuine Android device evidence from the separate PWA PR #23 gate
 - Explicit human sign-off. **NOT TESTED/NO_GO** until independently verified
   after preview authorization. Do not clear site data or migrate records.
+
+
+## Read-only 2026-10-17 migration completion: owner prerequisites
+
+The remaining preview/cutover tasks require *new explicit authorization*.
+Current live DNS is `tms60.thiepn.dev CNAME thiepn.github.io`, DNS-only,
+TTL 600 seconds. **Do not remove or repoint it to test a preview.**
+
+### Staged worker and preview hardening
+
+- On a staged build, the service worker now persists the checksum-verified
+  release manifest in its own version-specific cache, in addition to the CORE.
+  Restarted workers validate that saved manifest against their embedded SHA.
+- In an integrity-sealed release, cached CORE reads and runtime cache misses
+  compare the response bytes against the saved manifest. A cache miss with a
+  200 response containing different code fails closed instead of poisoning
+  the installed version. Offline-readiness checks detect corrupted cache data.
+- User-initiated `TMS60_PREPARE_OFFLINE` uses the committed manifest and
+  cannot repair missing executable code using unverified current-edge bytes
+  or previous-version fallback files. Full updates still wait for old
+  clients to close. Tests cover candidate and prior-cache retention.
+- The preview read-only checker **must** be run with the `dist/SHA256SUMS`
+  from a separately qualified candidate, or `TMS60_QUALIFIED_DIST` pointing
+  to an unpacked verified artifact. It rejects a preview with a self-consistent
+  but DIFFERENT checksum manifest; a hostile preview cannot certify itself.
+  Node's HTTPS certificate validation is active. The checker never contacts
+  production, OAuth, Bible Worker, Supabase or Cloudflare APIs.
+- Exact original Worker CORS logic was exercised locally. Both
+  `https://tms60.thiepn.dev` and `https://preview-tms60.thiepn.dev`
+  are accepted via the existing HTTPS `*.thiepn.dev` policy, but
+  arbitrary `*.pages.dev` URLs are not. This proves source behavior only,
+  not the live Worker binding or real cross-origin API response.
+- Original `account-sync.js` still derives `redirectTo` from
+  `topWindow.location.href`, keeps a PKCE verifier and returns on
+  `?tms60_auth=1`. Production callback:
+  `https://tms60.thiepn.dev/?tms60_auth=1`. A staging callback must be
+  individually approved and registered; no broad preview wildcard or
+  per-preview production identity changes. Local-only preview can be
+  tested without any signed-in session.
+
+### Owner's gated sequence — no action taken by this PR
+
+1. **Approve a preview only** and document target account/project, permitted
+   branch, approval scope, build configuration and whether Cloudflare Git
+   integration would trigger automatic production publication. Keep
+   `tms60.thiepn.dev` and Github Pages release active.
+2. Create a separate preview ONLY after approval, preferably with branch
+   deployments explicitly restricted. Retain the new deployment ID, exact
+   source SHA and HTTPS URL. Run preview checker against the independently
+   reviewed candidate artifact before any account test.
+3. Verify live preview TLS certificate, `_headers` behavior, redirects,
+   HTTPS/no mixed content and canonical root manifest. The checker automates
+   parts of this once an approved endpoint exists; not yet tested on Cloudflare.
+4. For signed-in testing, owner must approve an isolated `*.thiepn.dev`
+   staging hostname and *exact* OAuth callback in shared Supabase Auth
+   settings, or a truly separate authorized test identity/tenant. **Do not
+   use real user progress for staging**, enable indiscriminate wildcard
+   CORS, or run Supabase migrations.
+5. Obtain separate evidence for original local-first progress and translation
+   keys (with user consent), RLS-backed account restore, Google sign-in callback,
+   Bible Worker CORS and authorized translation rights. Do not expose
+   secrets or copy localStorage into issue comments.
+6. Test real Android installed PWA update and offline continuity, including
+   cross-origin preview limitations. Browser local mocks are not WebAPK proof.
+7. Only when all qualification gates pass: obtain **a new cutover approval**
+   documenting the current Cloudflare DNS record, expected SSL activation,
+   DNS propagation, current GitHub rollback artifact and rollback owner.
+   Keep exact hostname and root scope. Do not clear browser site data or
+   change the Worker/Supabase identities.
+8. Stop if any preview, OAuth, Worker, PWA/device or rollback evidence is absent.
+   A future DNS revert is not necessarily instant; installed service workers
+   may keep serving an older code bundle during propagation.
+
+**State:** locally source-qualified; Cloudflare Pages preview, edge TLS,
+physical installed-client update, live OAuth/Worker/API acceptance and
+real production rollback remain **NOT_TESTED / NO_GO**. This PR does not
+authorize creating Cloudflare projects, deployments or DNS modifications.

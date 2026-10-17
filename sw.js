@@ -12,14 +12,17 @@ const PRECACHE_PATHS=new Set(CORE.filter(path=>path!=='./manifest.webmanifest').
 function canonicalShellRequest(url){return new Request(new URL(url.pathname,self.location.origin))}
 const digestHex=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)))
   .map(value=>value.toString(16).padStart(2,'0')).join('');
-async function loadExpectedRelease(){
+async function loadExpectedRelease({offlineOnly=false}={}){
   if(!RELEASE_INTEGRITY_SHA256)return null;
   if(!/^[a-f0-9]{64}$/.test(RELEASE_INTEGRITY_SHA256))
     throw new Error('Invalid staged integrity commitment.');
-  const response=await fetch('./tms60-integrity.json',{cache:'reload'});
-  if(!response.ok||response.type==='opaque'||response.redirected)
+  const request=new Request(new URL('./tms60-integrity.json',self.location.href));
+  const cache=await caches.open(CACHE);
+  const response=offlineOnly?await cache.match(request):
+    await fetch(request,{cache:'reload'});
+  if(!response||!response.ok||response.type==='opaque'||response.redirected)
     throw new Error('Cannot verify exact staged integrity manifest.');
-  const data=await response.arrayBuffer();
+  const data=await response.clone().arrayBuffer();
   if(await digestHex(data)!==RELEASE_INTEGRITY_SHA256)
     throw new Error('Staged integrity manifest does not match this service worker.');
   const manifest=JSON.parse(new TextDecoder().decode(data));
@@ -31,6 +34,10 @@ async function loadExpectedRelease(){
   for(const path of required)
     if(!/^[a-f0-9]{64}$/.test(manifest.assets[path]||''))
       throw new Error('Required staged asset is missing an integrity digest: '+path);
+  // The signed-by-build digest commitment is embedded in the installed SW.
+  // Persist the verified manifest in THIS release cache so that worker restarts
+  // and offline repair never depend on fetching mutable CDN metadata again.
+  if(!offlineOnly)await cache.put(request,response.clone());
   return manifest.assets;
 }
 
@@ -74,10 +81,22 @@ function networkFirst(request,event,{navigation=false}={}){
 }
 
 async function cacheFirst(request){
-  const hit=await cachedResponse(request);
-  if(hit)return hit;
   try{
+    const expected=RELEASE_INTEGRITY_SHA256
+      ?await loadExpectedRelease({offlineOnly:true}):null;
+    const pathname=new URL(request.url).pathname;
+    const name=pathname===ROOT_PATH?'index.html':pathname.slice(ROOT_PATH.length);
+    const hit=await cachedResponse(request);
+    if(hit){
+      if(!expected||(hit.ok&&
+        expected[name]===await digestHex(await hit.clone().arrayBuffer())))
+        return hit;
+      // Do not serve a corrupt or wrong-version cached executable.
+    }
     const response=await fetch(request);
+    if(expected&&(!response.ok||response.type==='opaque'||response.redirected||
+      expected[name]!==await digestHex(await response.clone().arrayBuffer())))
+      return Response.error();
     await cacheSuccessful(request,response);
     return response;
   }catch(_){
@@ -112,6 +131,9 @@ async function precacheAsset(cache,url,expected=null){
     }
   }catch(_){/* Fall through to the previous installed cache. */}
 
+  // Staged PWA code cannot accept a previous-release fallback when the
+  // current-release digest was unavailable or mismatched.
+  if(expected)return {url,source:'missing'};
   try{
     const fallback=await previousCachedResponse(request);
     if(fallback){
@@ -169,10 +191,18 @@ self.addEventListener('fetch',event=>{
 });
 // User-initiated offline readiness reporting from the original P2/P3 protocol.
 async function offlineBundleStatus(cache){
+  const expected=RELEASE_INTEGRITY_SHA256
+    ?await loadExpectedRelease({offlineOnly:true}):null;
   const checks=await Promise.all(CORE.map(async url=>{
     try{
       const response=await cache.match(new Request(new URL(url,self.location.href)));
-      return {url,present:Boolean(response&&response.ok)};
+      if(!response||!response.ok)return {url,present:false};
+      if(expected){
+        const name=url==='./'?'index.html':url.slice(2);
+        const hash=await digestHex(await response.arrayBuffer());
+        return {url,present:hash===expected[name]};
+      }
+      return {url,present:true};
     }catch(_){return {url,present:false}}
   }));
   const missing=checks.filter(item=>!item.present).map(item=>item.url);
@@ -186,7 +216,9 @@ self.addEventListener('message',event=>{
       const cache=await caches.open(CACHE);
       if(type==='TMS60_PREPARE_OFFLINE'){
         const before=await offlineBundleStatus(cache);
-        await Promise.allSettled(before.missing.map(url=>precacheAsset(cache,url)));
+        const expected=RELEASE_INTEGRITY_SHA256
+          ?await loadExpectedRelease({offlineOnly:true}):null;
+        await Promise.allSettled(before.missing.map(url=>precacheAsset(cache,url,expected)));
       }
       const status=await offlineBundleStatus(cache);
       port.postMessage({...status,cache:CACHE,integrityCommitted:Boolean(RELEASE_INTEGRITY_SHA256)});

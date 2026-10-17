@@ -45,6 +45,7 @@ try{
       localStorage.setItem('tms60-onboarding-v3','1');
       localStorage.setItem('tms60-active-translation-v1','esv');
       localStorage.setItem('tms60-cloudflare-transition','keep-original');
+      localStorage.setItem('tms60-ui-language-v1','en');
     });
     await page.reload({waitUntil:'domcontentloaded'});
     await page.locator('#app-frame.ready').waitFor({timeout:30000});
@@ -67,10 +68,14 @@ try{
     assert.equal(waiting.waiting,true,'Validated new release waits for old study tab to close');
     const preservedOld=await page.evaluate(async()=>({
       app:await(await fetch('/app.html')).text(),
-      progress:localStorage.getItem('tms60-cloudflare-transition')
+      progress:localStorage.getItem('tms60-cloudflare-transition'),
+      language:localStorage.getItem('tms60-ui-language-v1'),
+      translation:localStorage.getItem('tms60-active-translation-v1')
     }));
     assert.ok(preservedOld.app.includes('TMS60_SOURCE_RELEASE'),'Old tab retains its version-pinned shell');
     assert.equal(preservedOld.progress,'keep-original');
+    assert.equal(preservedOld.language,'en');
+    assert.equal(preservedOld.translation,'esv');
 
     await page.close();
     await new Promise(resolve=>setTimeout(resolve,500));
@@ -94,11 +99,15 @@ try{
         await new Promise(resolve=>setTimeout(resolve,150));
       }
       return {state,storage:localStorage.getItem('tms60-cloudflare-transition'),
+        language:localStorage.getItem('tms60-ui-language-v1'),
+        translation:localStorage.getItem('tms60-active-translation-v1'),
         app:await(await fetch('/app.html')).text()};
     });
     assert.equal(upgraded.state?.integrityCommitted,true,'New staged worker was activated');
     assert.equal(upgraded.state?.ready,true,'New staged cache is complete');
-    assert.equal(upgraded.storage,'keep-original','Origin-local private state survived upgrade');
+    assert.equal(upgraded.storage,'keep-original','Origin-local test state survived upgrade');
+    assert.equal(upgraded.language,'en','Original UI language key survived same-origin cutover');
+    assert.equal(upgraded.translation,'esv','Original active translation key survived same-origin cutover');
     assert.ok(!upgraded.app.includes('TMS60_SOURCE_RELEASE'),'No stale source code remains in new shell');
     await context.setOffline(true);
     await page.reload({waitUntil:'domcontentloaded',timeout:30000});

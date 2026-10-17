@@ -26,6 +26,8 @@ jobs:
           node --check tests/cloudflare-pages-integrity.test.mjs
           node --check tests/cloudflare-pages-browser-transition.mjs
           node --check scripts/check-cloudflare-preview.mjs
+          node --check tests/cloudflare-pages-cutover-authority.test.mjs
+          node --check tests/cloudflare-pages-preview-negative.test.mjs
           node --test tests/cloudflare-pages-migration.test.mjs
           node --test tests/cloudflare-pages-sw-recovery.test.mjs
           node tests/pwa-install-metadata-regression.mjs
@@ -47,6 +49,8 @@ jobs:
           test -f dist/tms60-integrity.json
           test -f dist/404.html
           node --test tests/cloudflare-pages-integrity.test.mjs
+          node --test tests/cloudflare-pages-cutover-authority.test.mjs
+          node --test tests/cloudflare-pages-preview-negative.test.mjs
       - name: Locally test staged desktop and mobile Chromium
         run: |
           npm install --no-save playwright@1.55.0

@@ -3,6 +3,8 @@
 // JavaScript or talks to OAuth, Supabase, the Bible Worker or production DNS.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
 
 const provided=process.env.TMS60_PREVIEW_URL;
 if(!provided)throw Error('TMS60_PREVIEW_URL is required (no default production target).');
@@ -16,6 +18,10 @@ assert.ok(origin.pathname==='/'&&!origin.search&&!origin.hash&&!origin.username&
   'Preview must start at origin root, with no credentials, query or fragment');
 assert.notEqual(origin.hostname,'tms60.thiepn.dev','Never test production with preview checker');
 const base=origin.origin;
+// Remote SHA256SUMS is self-referential without an independently qualified
+// local artifact. Refuse preview verification if the baseline is absent.
+const expectedLocalLedger=await readFile(join(resolve(process.env.TMS60_QUALIFIED_DIST||'dist'),'SHA256SUMS'));
+assert.ok(expectedLocalLedger.length>0,'Independent qualified artifact is empty');
 function sha(bytes){return createHash('sha256').update(bytes).digest('hex')}
 async function get(path){
   assert.ok(path.startsWith('/')&&!path.startsWith('//')&&!path.includes('..'),'unsafe preview path '+path);
@@ -29,6 +35,8 @@ async function get(path){
 }
 const checksums=await get('/SHA256SUMS');
 assert.equal(checksums.status,200,'Candidate checksum artifact is required');
+assert.deepEqual(checksums.bytes,expectedLocalLedger,
+  'Preview SHA256SUMS differs from exact locally qualified artifact');
 const rows=checksums.bytes.toString('utf8').trim().split('\n');
 const expected=new Map();
 for(const line of rows){
@@ -76,11 +84,17 @@ for(const forbidden of ['/CNAME','/worker/src/index.js','/supabase/migrations/20
   assert.equal(response.status,404,'Preview leaked private source or has SPA fallback at '+forbidden);
 }
 if(!local){
+  // Node fetch verifies HTTPS certificate identity and validity.
   for(const file of ['sw.js','tms60-integrity.json','niv-service.json']){
     const cache=payload.get(file).headers.get('cache-control')||'';
     assert.match(cache,/no-store/i,'Edge cache policy missing for '+file);
   }
+  assert.match(payload.get('sw.js').headers.get('content-type')||'',/javascript|ecmascript/i,
+    'Service worker MIME must be JavaScript');
+  assert.match(payload.get('manifest.webmanifest').headers.get('content-type')||'',
+    /application\/manifest\+json|application\/json/i,
+    'Manifest MIME must be application/manifest+json or JSON');
 }
 console.log('PASS read-only '+(local?'loopback':'authorized preview')+
-  ': '+payload.size+' exact asset hashes, sealed SW/core integrity, original canonical origin/PWA/API and 404 isolation');
+  ': '+payload.size+' independently matched asset hashes, sealed SW/core integrity, original canonical origin/PWA/API and 404 isolation');
 if(local)console.log('NOT_TESTED Cloudflare edge, HTTPS staging, Worker CORS, OAuth/sync and physical Android');
