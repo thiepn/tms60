@@ -15,7 +15,7 @@ check(/<link\b[^>]*rel=["']manifest["'][^>]*href=["']\/manifest\.webmanifest(?:\
   'Manifest is linked statically from the dedicated-origin root');
 check(/<meta\b[^>]*name=["']mobile-web-app-capable["'][^>]*content=["']yes["'][^>]*>/i.test(index),
   'Android web-app capability metadata is static');
-check(/<link\b[^>]*rel=["']apple-touch-icon["'][^>]*href=["']\/icon-192\.png(?:\\?[^"']*)?["'][^>]*>/i.test(index),
+check(/<link\b[^>]*rel=["']apple-touch-icon["'][^>]*href=["']\/icon-192\.png(?:\?[^"']*)?["'][^>]*>/i.test(index),
   'Touch icon is rooted on the dedicated TMS60 origin');
 check(/navigator\.serviceWorker\.register\(['"]\/sw\.js['"],\{scope:['"]\/['"],updateViaCache:['"]none['"]\}\)/.test(index),
   'Top-level shell registers the root service worker immediately with cache bypass');
