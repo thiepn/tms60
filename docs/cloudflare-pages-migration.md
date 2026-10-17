@@ -287,3 +287,36 @@ documentation: https://developers.cloudflare.com/pages/configuration/serving-pag
   rather than a permissive Python file server.
 - These tests are source-local simulations; actual Cloudflare edge routing,
   HTTPS and domain activation still require separately approved staging.
+
+## Failure-atomic and concurrent staging (October 17 review gate)
+
+The public-only static builder now uses an exclusive `.tms60-cloudflare-stage.lock`
+directory. Any overlapping invocation, or an unreviewed leftover lock, fails closed;
+it NEVER deletes another builder's lock. It prepares a uniquely named same-filesystem
+candidate in `.tms60-cloudflare-candidate-*`, completes all SHA-256 checksums and
+static release commitment before publishing, then switches the old `dist` directory
+to a uniquely named rollback backup and renames the complete candidate into place.
+If the final promotion fails, it attempts to put the old `dist` back before
+reporting an error. An unrecoverable rename preserves the backup for manual
+owner recovery. Failed prepublication discards only the unqualified candidate.
+
+Node tests exercise interrupted staging, a blocked concurrent writer and a
+pre-existing owner lock, verifying the previously qualified dist checksum and
+app bytes remain intact. This is a filesystem-level candidate promotion with
+a bounded rename window, NOT an atomic multipath transaction that guarantees
+readers using dist never briefly observe a missing path. Consumers should
+open the review artifact only after the builder successfully exits.
+The lock is workspace-local, not a distributed lock across separate runners.
+
+Preview negative tests simulate a successful HTTP 200 with tampered app bytes
+despite an unchanged ledger, an unexpected Pages HTML redirect and exposure
+of the normally private CNAME path. All must refuse qualification.
+
+Desktop and mobile Chromium additionally exercise simulated same-origin
+rollback (staged Cloudflare-like SW to source/GitHub-Pages-like SW). A live
+study tab keeps its shell, rollback waits for client closure, settings and
+PWA scope remain intact, and the reverted source shell relaunches offline.
+This does NOT prove an actual DNS/TLS cutover or physical WebAPK rollback.
+
+As before: NO production deployment, domain change, OAuth configuration,
+secrets, Supabase, Bible Worker or other remote writes are authorized.

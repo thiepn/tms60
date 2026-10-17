@@ -125,7 +125,69 @@ try{
     await page.locator('#app-frame.ready').waitFor({timeout:30000});
     assert.equal(await page.evaluate(()=>localStorage.getItem('tms60-cloudflare-transition')),
       'keep-original','Offline relaunch retains existing local state');
+
+    // Simulate a same-origin DNS/hosting rollback after the staged version
+    // was installed, WITHOUT changing the hostname or clearing site data.
+    // This verifies the original source worker can replace a staged worker.
+    await context.setOffline(false);
+    mode='source';
+    const rollbackWaiting=await page.evaluate(async()=>{
+      const registration=await navigator.serviceWorker.ready;
+      await registration.update();
+      const deadline=Date.now()+20000;
+      while(!registration.waiting&&Date.now()<deadline)
+        await new Promise(resolve=>setTimeout(resolve,100));
+      return Boolean(registration.waiting);
+    });
+    assert.equal(rollbackWaiting,true,'Rollback worker waits while the staged session remains active');
+    const beforeClose=await page.evaluate(async()=>({
+      app:await(await fetch('/app.html')).text(),
+      progress:localStorage.getItem('tms60-cloudflare-transition')
+    }));
+    assert.ok(!beforeClose.app.includes('TMS60_SOURCE_RELEASE'),
+      'Open study tab remains on current version until owner closes it');
+    assert.equal(beforeClose.progress,'keep-original');
+    await page.close();
+    await new Promise(resolve=>setTimeout(resolve,500));
+    page=await context.newPage();
+    await page.goto(origin,{waitUntil:'domcontentloaded',timeout:30000});
+    await page.locator('#app-frame.ready').waitFor({timeout:30000});
+    const reverted=await page.evaluate(async()=>{
+      const deadline=Date.now()+20000;
+      let sourceCode='',names=[];
+      while(Date.now()<deadline){
+        sourceCode=await(await fetch('/app.html')).text();
+        names=await caches.keys();
+        if(sourceCode.includes('TMS60_SOURCE_RELEASE'))break;
+        await new Promise(resolve=>setTimeout(resolve,150));
+      }
+      return {sourceCode,names,
+        progress:localStorage.getItem('tms60-cloudflare-transition'),
+        language:localStorage.getItem('tms60-ui-language-v1'),
+        translation:localStorage.getItem('tms60-active-translation-v1'),
+        scope:(await navigator.serviceWorker.ready).scope};
+    });
+    assert.ok(reverted.sourceCode.includes('TMS60_SOURCE_RELEASE'),
+      'Original source shell reinstalls after rollback');
+    assert.equal(reverted.progress,'keep-original');
+    assert.equal(reverted.language,'en');
+    assert.equal(reverted.translation,'esv');
+    assert.equal(reverted.scope,origin,'Rollback does not change PWA origin/scope');
+    assert.ok(reverted.names.some(name=>name==='tms60-cloudflare-recovery-2026-10-17'),
+      'The original source-owned worker cache becomes active again');
+    assert.ok(!reverted.names.some(name=>name.startsWith('tms60-release-')),
+      'Rolled-back worker cleans only superseded TMS60 release cache');
+    await context.setOffline(true);
+    await page.reload({waitUntil:'domcontentloaded',timeout:30000});
+    await page.locator('#app-frame.ready').waitFor({timeout:30000});
+    const offlineRolledBack=await page.evaluate(async()=>({
+      code:(await(await fetch('/app.html')).text()).includes('TMS60_SOURCE_RELEASE'),
+      progress:localStorage.getItem('tms60-cloudflare-transition')
+    }));
+    assert.equal(offlineRolledBack.code,true,'Original GitHub-Pages-style shell works offline after rollback');
+    assert.equal(offlineRolledBack.progress,'keep-original');
     await context.close();
-    console.log('PASS',mobile?'mobile':'desktop','two-release same-origin SW waiting, activation, local state, offline continuity');
+    console.log('PASS',mobile?'mobile':'desktop',
+      'forward + rollback same-origin SW waiting, installed shell, preferences and offline continuity');
   }
 } finally {await browser.close();await new Promise(resolve=>server.close(resolve))}

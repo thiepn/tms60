@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Build public browser assets only. No deployment, credentials, API or DNS changes.
-import {readdir, readFile, copyFile, mkdir, lstat, rm, writeFile} from 'node:fs/promises';
+import {readdir, readFile, copyFile, mkdir, lstat, rm, writeFile, rename, mkdtemp} from 'node:fs/promises';
 import {resolve, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {createHash} from 'node:crypto';
+import {createHash, randomUUID} from 'node:crypto';
 
 const EXT=new Set(['.html','.js','.json','.svg','.png','.webmanifest','.css','.ico','.webp','.woff2']);
 const REQUIRED=['index.html','app.html','sw.js','manifest.webmanifest','niv-service.json','translations.js',
@@ -25,9 +25,20 @@ async function isSafeFile(path){
   check(s.isFile()&&!s.isSymbolicLink(),'non-regular asset: '+path);
   check(s.size<=25*1024*1024,'Cloudflare Pages asset exceeds 25 MiB: '+path);
 }
-export async function stageStaticSite(root=process.cwd()){
+export async function stageStaticSite(root=process.cwd(),{beforePublish}={}){
   root=resolve(root);
   const out=join(root,'dist');
+  const lock=join(root,'.tms60-cloudflare-stage.lock');
+  let temp=null,backup=null,locked=false;
+  // mkdir is exclusive across processes. Do not delete an existing lock:
+  // it might be an active builder or require owner investigation after crash.
+  try{
+    await mkdir(lock);locked=true;
+  }catch(error){
+    if(error.code==='EEXIST')throw Error('Static staging denied: staging lock exists; concurrent build or interrupted owner review');
+    throw error;
+  }
+  try{
   try{
     const s=await lstat(out);
     check(s.isDirectory()&&!s.isSymbolicLink(),'dist is symlink or non-directory');
@@ -70,11 +81,12 @@ export async function stageStaticSite(root=process.cwd()){
   check(manifest.id==='/'&&manifest.start_url==='/'&&manifest.scope==='/'&&manifest.display==='standalone',
     'PWA app identity/start/scope changed');
   check(proxy.baseUrl==='https://tms60-niv-api.thiepn.workers.dev','Bible Worker endpoint changed');
-  await rm(out,{recursive:true,force:true});
-  await mkdir(out,{recursive:true});
+  // Prepare a fully verified candidate beside dist on the same filesystem.
+  // NEVER delete the previously qualified artifact before this succeeds.
+  temp=await mkdtemp(join(root,'.tms60-cloudflare-candidate-'));
   for(const name of selected){
-    const source=join(root,name),target=join(out,name);
-    if(name.includes('/'))await mkdir(join(out,name.split('/')[0]),{recursive:true});
+    const source=join(root,name),target=join(temp,name);
+    if(name.includes('/'))await mkdir(join(temp,name.split('/')[0]),{recursive:true});
     await copyFile(source,target);
   }
   // A deterministic build-bound manifest lets the worker reject complete but
@@ -82,7 +94,7 @@ export async function stageStaticSite(root=process.cwd()){
   // public CORE files, not private user data or remote APIs.
   const assets={};
   for(const name of [...new Set(core.map(x=>x==='./'?'index.html':x.slice(2)))].sort()){
-    const bytes=await readFile(join(out,name));
+    const bytes=await readFile(join(temp,name));
     assets[name]=createHash('sha256').update(bytes).digest('hex');
   }
   // Source + all precached bytes determine a distinct versioned cache.
@@ -97,21 +109,48 @@ export async function stageStaticSite(root=process.cwd()){
   const stagedWorker=workerSource
     .replace("const CACHE='"+buildCache+"';","const CACHE='"+stageCache+"';")
     .replace(sentinel,"const RELEASE_INTEGRITY_SHA256='"+commitment+"';");
-  await writeFile(join(out,'sw.js'),stagedWorker,'utf8');
-  await writeFile(join(out,'tms60-integrity.json'),integrity,'utf8');
+  await writeFile(join(temp,'sw.js'),stagedWorker,'utf8');
+  await writeFile(join(temp,'tms60-integrity.json'),integrity,'utf8');
   // A concrete 404 keeps Pages from pretending that a missing dependency is
   // a successful SPA navigation. Do not redirect or rewrite user state.
-  await writeFile(join(out,'404.html'),
+  await writeFile(join(temp,'404.html'),
     '<!doctype html><html lang="en"><meta charset="utf-8"><title>Not found</title><h1>Not found</h1></html>\n','utf8');
-  await writeFile(join(out,'_headers'),HEADERS,'utf8');
+  await writeFile(join(temp,'_headers'),HEADERS,'utf8');
   const hashes=[];
   for(const name of ['_headers','404.html','tms60-integrity.json',...selected].sort()){
-    const value=await readFile(join(out,name));
+    const value=await readFile(join(temp,name));
     const sha=createHash('sha256').update(value).digest('hex');
     hashes.push(sha+'  '+name);
   }
-  await writeFile(join(out,'SHA256SUMS'),hashes.join('\n')+'\n','utf8');
+  await writeFile(join(temp,'SHA256SUMS'),hashes.join('\n')+'\n','utf8');
+  // All artifacts and checksums exist before entering the short commit window.
+  if(beforePublish)await beforePublish({candidate:temp,previous:out});
+  let exists=false;
+  try{await lstat(out);exists=true}catch(error){if(error.code!=='ENOENT')throw error}
+  if(exists){
+    backup=join(root,'.tms60-cloudflare-previous-'+randomUUID());
+    await rename(out,backup);
+  }
+  try{
+    await rename(temp,out);
+    temp=null;
+  }catch(error){
+    if(backup){
+      try{await rename(backup,out);backup=null}
+      catch(restoreError){
+        throw new AggregateError([error,restoreError],
+          'Static staging failed and previous artifact needs manual recovery from '+backup);
+      }
+    }
+    throw error;
+  }
+  if(backup){await rm(backup,{recursive:true,force:true});backup=null}
   return {directory:out,files:['_headers','404.html','tms60-integrity.json','SHA256SUMS',...selected]};
+  }finally{
+    if(temp)await rm(temp,{recursive:true,force:true});
+    // Any remaining backup is intentionally preserved if rollback failed.
+    if(locked)await rm(lock,{recursive:true,force:true});
+  }
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   stageStaticSite().then(x=>console.log('Staged',x.files.length,'public files in dist (NOT DEPLOYED)'))

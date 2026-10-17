@@ -103,6 +103,59 @@ test('preview inspector refuses canonical origin before any network I/O',async()
   assert.notEqual(run.status,0);
   assert.match(run.stderr,/Only loopback|Never test production|notEqual/);
 });
+
+test('an interrupted candidate preserves last qualified dist and cleans only owned temporary state',async()=>{
+  const root=await fixture();
+  try{
+    await stageStaticSite(root);
+    const before=await readFile(join(root,'dist','SHA256SUMS'));
+    const original=await readFile(join(root,'dist','app.html'));
+    await assert.rejects(stageStaticSite(root,{beforePublish:async({candidate,previous})=>{
+      assert.equal(previous,join(root,'dist'));
+      assert.ok((await readFile(join(candidate,'SHA256SUMS'))).length>200);
+      assert.deepEqual(await readFile(join(previous,'SHA256SUMS')),before);
+      throw Error('simulated disk/publish interruption');
+    }}),/simulated disk\/publish interruption/);
+    assert.deepEqual(await readFile(join(root,'dist','SHA256SUMS')),before);
+    assert.deepEqual(await readFile(join(root,'dist','app.html')),original);
+    const left=await readdir(root);
+    assert.ok(!left.includes('.tms60-cloudflare-stage.lock'));
+    assert.ok(!left.some(x=>x.startsWith('.tms60-cloudflare-candidate-')));
+    assert.ok(!left.some(x=>x.startsWith('.tms60-cloudflare-previous-')));
+  }finally{await rm(root,{recursive:true,force:true})}
+});
+test('overlapping stage calls fail closed instead of racing to delete published dist',async()=>{
+  const root=await fixture();
+  try{
+    await stageStaticSite(root);
+    const before=await readFile(join(root,'dist','SHA256SUMS'));
+    let entered;
+    const barrier=new Promise(resolve=>{entered=resolve});
+    let release;
+    const hold=new Promise(resolve=>{release=resolve});
+    const writer=stageStaticSite(root,{beforePublish:async()=>{entered();await hold}});
+    await barrier;
+    await assert.rejects(stageStaticSite(root),/staging lock exists/);
+    assert.deepEqual(await readFile(join(root,'dist','SHA256SUMS')),before);
+    release();
+    await writer;
+    assert.deepEqual(await readFile(join(root,'dist','SHA256SUMS')),before);
+    assert.ok(!(await readdir(root)).includes('.tms60-cloudflare-stage.lock'));
+  }finally{await rm(root,{recursive:true,force:true})}
+});
+test('preexisting lock fails closed without clearing it or overwriting current dist',async()=>{
+  const root=await fixture();
+  try{
+    await stageStaticSite(root);
+    const snapshot=await readFile(join(root,'dist','SHA256SUMS'));
+    await mkdir(join(root,'.tms60-cloudflare-stage.lock'));
+    await writeFile(join(root,'.tms60-cloudflare-stage.lock','owner'),'manual review required');
+    await assert.rejects(stageStaticSite(root),/staging lock exists/);
+    assert.equal(await readFile(join(root,'.tms60-cloudflare-stage.lock','owner'),'utf8'),
+      'manual review required');
+    assert.deepEqual(await readFile(join(root,'dist','SHA256SUMS')),snapshot);
+  }finally{await rm(root,{recursive:true,force:true})}
+});
 test('refuses asset/output symlinks',async()=>{
   const root=await fixture();
   try{
