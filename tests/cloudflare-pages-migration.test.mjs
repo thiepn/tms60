@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {stageStaticSite,HEADERS,PUBLIC_ROOT} from '../scripts/build-cloudflare-pages.mjs';
+import {decodeRgbaPng} from '../scripts/pwa-icon-raster.mjs';
 const ROOT=resolve('.');
 const REQUIRED=['index.html','app.html','sw.js','manifest.webmanifest','niv-service.json','translations.js',
   'account-sync.js','icon-192.png','icon-512.png','vendor/supabase-2.116.0.js','vendor/LICENSE.supabase'];
@@ -30,12 +31,28 @@ test('static stage only includes browser files, not CNAME, SQL, worker or GitHub
     await writeFile(join(root,'extra.js'),'window.extra=true');
     await assert.rejects(stageStaticSite(root),/unreviewed root web asset: extra.js/);
     await rm(join(root,'extra.js'));
+    const awaitedSourceIcons=new Map(await Promise.all([192,512].map(async size=>{
+      const name='icon-'+size+'.png';return [name,await readFile(join(root,name))];
+    })));
     const stage=await stageStaticSite(root);
     for(const f of REQUIRED)assert.ok(stage.files.includes(f),'missing staged '+f);
     for(const f of ['CNAME','README.md','supabase','worker','.github','tests','scripts'])assert.ok(!stage.files.includes(f));
     assert.ok(!stage.files.includes('extra.js'));
     assert.equal(await readFile(join(root,'dist','_headers'),'utf8'),HEADERS);
     assert.ok(stage.files.includes('tms60-integrity.json'));
+    // Original checked-in PNG bytes are malformed (IDAT CRC / compressed stream).
+    // Cloudflare output MUST be regenerated from source-owned favicon artwork.
+    for(const size of [192,512]){
+      const name='icon-'+size+'.png';
+      assert.throws(()=>decodeRgbaPng(awaitedSourceIcons.get(name)),/PNG CRC mismatch|PNG chunk payload truncated/,
+        'Regression fixture expects the original, broken source icon');
+      const rebuilt=await readFile(join(root,'dist',name));
+      const {width,height,pixels}=decodeRgbaPng(rebuilt);
+      assert.equal(width,size);assert.equal(height,size);
+      assert.ok(pixels.some(value=>value!==0),'PWA icon artwork is not blank');
+      assert.notDeepEqual(rebuilt,awaitedSourceIcons.get(name));
+    }
+
     assert.ok(stage.files.includes('404.html'));
     const integrity=await readFile(join(root,'dist','tms60-integrity.json'));
     const sealedWorker=await readFile(join(root,'dist','sw.js'),'utf8');
@@ -63,6 +80,16 @@ test('static stage only includes browser files, not CNAME, SQL, worker or GitHub
     assert.deepEqual(await readdir(join(root,'dist')),before);
     const copy=await readFile(join(root,'dist','tms60-integrity.json'));
     assert.deepEqual(copy,integrity,'Rebuilding identical source must produce identical release integrity');
+  }finally{await rm(root,{recursive:true,force:true})}
+});
+test('rejects malformed embedded artwork without overwriting a valid staged release',async()=>{
+  const root=await fixture();
+  try{
+    await stageStaticSite(root);
+    const before=await readFile(join(root,'dist','SHA256SUMS'));
+    await writeFile(join(root,'favicon.svg'),'<svg><image href="data:image/png;base64,INVALID"/></svg>');
+    await assert.rejects(stageStaticSite(root),/Expected exactly one embedded source-owned PNG artwork/);
+    assert.deepEqual(await readFile(join(root,'dist','SHA256SUMS')),before);
   }finally{await rm(root,{recursive:true,force:true})}
 });
 test('rejects app-identity, translation-API and service worker drift',async()=>{
