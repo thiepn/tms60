@@ -1,6 +1,6 @@
 import {chromium} from 'playwright';
 
-const APP='https://thiepn.github.io/tms60/';
+const APP=process.env.TMS60_TEST_URL||'https://thiepn.github.io/tms60/';
 let failures=0;
 const check=(condition,name,detail='')=>{
   console.log(`${condition?'PASS':'FAIL'} ${name}${detail?' — '+detail:''}`);

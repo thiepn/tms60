@@ -51,6 +51,8 @@ jobs:
             sleep 1
           done
           node tests/cloudflare-pages-local-smoke.mjs
+          TMS60_TEST_URL=http://127.0.0.1:4173/ node tests/p2-3-service-worker-strategy.mjs
+          TMS60_TEST_URL=http://127.0.0.1:4173/ node tests/p2-4-resilient-precache.mjs
       - name: Upload non-deployed reviewer artifact only
         uses: actions/upload-artifact@v4
         with:
