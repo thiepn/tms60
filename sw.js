@@ -8,6 +8,17 @@ const STATIC_ASSETS=new Set(['./favicon.svg','./icon-192.png','./icon-512.png'].
 const MANIFEST_PATH=new URL('./manifest.webmanifest',self.location.href).pathname;
 // P3 version-pinned shell, adapted to main's canonical CORE (no native-pwa.js).
 const ROOT_PATH=new URL('./',self.location.href).pathname;
+const PRETTY_APP_PATH=new URL('./app',self.location.href).pathname;
+// Cloudflare Pages redirects /index.html => / and /app.html => /app.
+// Fetch their canonical URLs on staged builds, then store them under the
+// original CORE paths so legacy app and service-worker identity remain intact.
+function releaseNetworkURL(input){
+  const url=new URL(typeof input==='string'?input:input.url,self.location.href);
+  if(!RELEASE_INTEGRITY_SHA256)return url;
+  if(url.pathname===new URL('./index.html',self.location.href).pathname)url.pathname=ROOT_PATH;
+  else if(url.pathname===new URL('./app.html',self.location.href).pathname)url.pathname=PRETTY_APP_PATH;
+  return url;
+}
 const PRECACHE_PATHS=new Set(CORE.filter(path=>path!=='./manifest.webmanifest').map(path=>new URL(path,self.location.href).pathname));
 function canonicalShellRequest(url){return new Request(new URL(url.pathname,self.location.origin))}
 const digestHex=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)))
@@ -93,7 +104,7 @@ async function cacheFirst(request){
         return hit;
       // Do not serve a corrupt or wrong-version cached executable.
     }
-    const response=await fetch(request);
+    const response=await fetch(expected?releaseNetworkURL(request):request);
     if(expected&&(!response.ok||response.type==='opaque'||response.redirected||
       expected[name]!==await digestHex(await response.clone().arrayBuffer())))
       return Response.error();
@@ -119,7 +130,7 @@ async function previousCachedResponse(request){
 async function precacheAsset(cache,url,expected=null){
   const request=new Request(new URL(url,self.location.href));
   try{
-    const response=await fetch(url,{cache:'reload'});
+    const response=await fetch(expected?releaseNetworkURL(url):url,{cache:'reload'});
     if(response&&response.ok&&response.type!=='opaque'&&!response.redirected){
       if(expected){
         const name=url==='./'?'index.html':url.slice(2);
@@ -179,6 +190,9 @@ self.addEventListener('fetch',event=>{
   const url=new URL(req.url);if(url.origin!==location.origin)return;
   if(req.headers.has('range')){event.respondWith(fetch(req));return}
   if(req.mode==='navigate'){
+    if(RELEASE_INTEGRITY_SHA256&&url.pathname===PRETTY_APP_PATH){
+      event.respondWith(cacheFirst(new Request(new URL('./app.html',self.location.href))));return;
+    }
     if(url.pathname===ROOT_PATH||PRECACHE_PATHS.has(url.pathname)){
       event.respondWith(cacheFirst(canonicalShellRequest(url)));return;
     }

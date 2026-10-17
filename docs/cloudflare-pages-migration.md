@@ -259,3 +259,31 @@ TTL 600 seconds. **Do not remove or repoint it to test a preview.**
 physical installed-client update, live OAuth/Worker/API acceptance and
 real production rollback remain **NOT_TESTED / NO_GO**. This PR does not
 authorize creating Cloudflare projects, deployments or DNS modifications.
+
+
+## Cloudflare Pages extensionless HTML routing (2026-10-17)
+
+Cloudflare Pages **automatically redirects** `/index.html` to `/`
+and `/app.html` to `/app`; these are different from the unmodified
+GitHub Pages/test-server paths. The old migration worker rejected redirected
+responses from its CORE install and would fail to install even if every
+asset were present. See the official Cloudflare Pages "Serving Pages"
+documentation: https://developers.cloudflare.com/pages/configuration/serving-pages/
+
+- The **staged** worker now fetches root HTML from `/` and app HTML from
+  `/app`, while caching the byte-verified responses under the original
+  `./index.html` and `./app.html` CORE keys. Its source build without a
+  release commitment retains original `.html` behavior for GitHub Pages.
+- Missing CORE cache entries are recovered through the same verified canonical
+  routes. Direct `/app` navigation is served from the pinned app shell
+  offline. No installed PWA ID, hostname, account, callback or data key changes.
+- The read-only preview checker verifies expected `.html` redirects,
+  independently checks the bytes served at `/` and `/app`, and avoids
+  mistakenly treating `404.html` (special Pages error document) as an
+  ordinary HTTP 200 public asset.
+- The CI now serves the built artifact through a **loopback-only** Pages route
+  emulator which implements clean HTML redirects and pretty-route resolution.
+  Browser/Node acceptance must pass against this stricter Pages behavior
+  rather than a permissive Python file server.
+- These tests are source-local simulations; actual Cloudflare edge routing,
+  HTTPS and domain activation still require separately approved staging.

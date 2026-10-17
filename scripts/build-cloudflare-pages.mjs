@@ -14,6 +14,7 @@ export const HEADERS=[
   '/index.html','  Cache-Control: no-cache, must-revalidate','',
   '/','  Cache-Control: no-cache, must-revalidate','',
   '/app.html','  Cache-Control: no-cache, must-revalidate','',
+  '/app','  Cache-Control: no-cache, must-revalidate','',
   '/manifest.webmanifest','  Cache-Control: no-cache, must-revalidate','',
   '/niv-service.json','  Cache-Control: no-store, no-cache, must-revalidate','',
   '/tms60-integrity.json','  Cache-Control: no-store, no-cache, must-revalidate',''

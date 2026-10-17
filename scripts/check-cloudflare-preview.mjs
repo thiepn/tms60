@@ -23,14 +23,22 @@ const base=origin.origin;
 const expectedLocalLedger=await readFile(join(resolve(process.env.TMS60_QUALIFIED_DIST||'dist'),'SHA256SUMS'));
 assert.ok(expectedLocalLedger.length>0,'Independent qualified artifact is empty');
 function sha(bytes){return createHash('sha256').update(bytes).digest('hex')}
-async function get(path){
+async function get(path,{expectedRedirect=null}={}){
   assert.ok(path.startsWith('/')&&!path.startsWith('//')&&!path.includes('..'),'unsafe preview path '+path);
   const response=await fetch(base+path,{
     method:'GET',redirect:'manual',credentials:'omit',cache:'no-store',
     headers:{'Cache-Control':'no-cache','Accept':'*/*'},signal:AbortSignal.timeout(12000)
   });
-  assert.ok(![301,302,303,307,308].includes(response.status),'Preview redirected '+path);
   assert.equal(new URL(response.url).origin,base,'Preview unexpectedly changed origin');
+  if(expectedRedirect){
+    assert.ok([301,302,307,308].includes(response.status),
+      'Pages must redirect HTML route '+path);
+    const target=new URL(response.headers.get('location')||'',base);
+    assert.equal(target.href,new URL(expectedRedirect,base).href,
+      'Pages redirect target differs from original root-scope routing');
+  }else{
+    assert.ok(![301,302,303,307,308].includes(response.status),'Unexpected preview redirect '+path);
+  }
   return {status:response.status,headers:response.headers,bytes:Buffer.from(await response.arrayBuffer())};
 }
 const checksums=await get('/SHA256SUMS');
@@ -52,13 +60,18 @@ for(const path of ['sw.js','index.html','app.html','manifest.webmanifest','niv-s
 const payload=new Map();
 for(const [path,digest] of expected){
   // Cloudflare Pages consumes _headers as a control file and need not serve it.
-  if(path==='_headers')continue;
-  // Always test index bytes through /: Pages may canonicalize /index.html to /.
-  const response=await get(path==='index.html'?'/':'/'+path);
+  if(path==='_headers'||path==='404.html')continue;
+  // Pages serves HTML via extensionless pretty URLs. Verify the actual bytes.
+  const served=path==='index.html'?'/':path==='app.html'?'/app':'/'+path;
+  const response=await get(served);
   assert.equal(response.status,200,'Preview asset missing '+path);
   assert.equal(sha(response.bytes),digest,'Preview asset differs from tested artifact: '+path);
   payload.set(path,response);
 }
+// Strictly enforce Pages' canonical HTML redirects. These used to break
+// stage-worker precaching when fetched as *.html.
+await get('/index.html',{expectedRedirect:'/'});
+await get('/app.html',{expectedRedirect:'/app'});
 const sw=payload.get('sw.js').bytes.toString('utf8');
 const integrity=payload.get('tms60-integrity.json').bytes;
 const expectedCommitment=sw.match(/const RELEASE_INTEGRITY_SHA256='([a-f0-9]{64})'/)?.[1];

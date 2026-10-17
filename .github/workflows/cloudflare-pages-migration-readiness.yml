@@ -26,6 +26,7 @@ jobs:
           node --check tests/cloudflare-pages-integrity.test.mjs
           node --check tests/cloudflare-pages-browser-transition.mjs
           node --check scripts/check-cloudflare-preview.mjs
+          node --check scripts/serve-cloudflare-pages-local.mjs
           node --check tests/cloudflare-pages-cutover-authority.test.mjs
           node --check tests/cloudflare-pages-preview-negative.test.mjs
           node --test tests/cloudflare-pages-migration.test.mjs
@@ -55,11 +56,13 @@ jobs:
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
-          nohup python3 -m http.server 4173 --bind 127.0.0.1 --directory dist >/tmp/tms60-cf-review.log 2>&1 &
+          nohup node scripts/serve-cloudflare-pages-local.mjs >/tmp/tms60-cf-review.log 2>&1 &
           for i in {1..30}; do
             if curl -fsS http://127.0.0.1:4173/ >/dev/null; then break; fi
             sleep 1
           done
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4173/app.html)" = "308"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4173/app)" = "200"
           TMS60_PREVIEW_URL=http://127.0.0.1:4173/ node scripts/check-cloudflare-preview.mjs
           node tests/cloudflare-pages-local-smoke.mjs
           TMS60_TEST_URL=http://127.0.0.1:4173/ node tests/p2-3-service-worker-strategy.mjs

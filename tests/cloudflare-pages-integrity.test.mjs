@@ -44,7 +44,9 @@ function simulate({previous=false,tamper='',manifestTamper=false,manifestMissing
       if(manifestMissing)return new Response('missing',{status:404});
       return new Response(manifestTamper?'{"invalid":true}':json,{status:200});
     }
-    let name=url.pathname==='/'?'index.html':url.pathname.slice(1);
+    if(url.pathname==='/index.html'||url.pathname==='/app.html')
+      return new Response(null,{status:308,headers:{Location:url.pathname==='/app.html'?'/app':'/'}});
+    let name=url.pathname==='/'?'index.html':url.pathname==='/app'?'app.html':url.pathname.slice(1);
     if(!paths.includes(name))return new Response('Not found',{status:404});
     const payload=activeTamper===name?Buffer.from('MISMATCH-BUT-HTTP-200'):readFileSync(join(root,name));
     return new Response(payload,{status:200});
@@ -90,6 +92,8 @@ assert.equal(verified.skips,1);
 assert.equal(verified.stores.get(cache).size,core.length+1,
   'Candidate cache includes CORE and its independently verified manifest');
 const staged=verified.stores.get(cache);
+assert.equal((await verified.fetchPath('/app')).ok,true,
+  'Cloudflare pretty /app navigation must use the pinned original app.html cache');
 assert.ok(staged.has('https://stage.example.test/tms60-integrity.json'));
 
 // A 200 OK response with bytes from a different rollout cannot refill a missing

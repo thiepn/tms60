@@ -17,7 +17,12 @@ const headersFor=path=>{
 };
 const server=createServer(async(request,response)=>{
   const p=new URL(request.url||'/', 'http://localhost').pathname;
-  const file=p==='/'?'index.html':decodeURIComponent(p.slice(1));
+  const file=p==='/'?'index.html':
+    (mode==='stage'&&p==='/app'?'app.html':decodeURIComponent(p.slice(1)));
+  if(mode==='stage'&&(p==='/index.html'||p==='/app.html')){
+    response.writeHead(308,{Location:p==='/app.html'?'/app':'/','cache-control':'no-store'});
+    response.end();return;
+  }
   if(!/^[a-z0-9._/-]+$/i.test(file)||file.includes('..')){
     response.writeHead(404);response.end('Not found');return;
   }
@@ -109,6 +114,12 @@ try{
     assert.equal(upgraded.language,'en','Original UI language key survived same-origin cutover');
     assert.equal(upgraded.translation,'esv','Original active translation key survived same-origin cutover');
     assert.ok(!upgraded.app.includes('TMS60_SOURCE_RELEASE'),'No stale source code remains in new shell');
+    const pretty=await page.evaluate(async()=>{
+      const response=await fetch('/app');
+      return {ok:response.ok,app:(await response.text()).includes('TMS Memory Lab')};
+    });
+    assert.equal(pretty.ok,true,'Canonical Pages pretty /app route is usable');
+    assert.equal(pretty.app,true,'Cloudflare pretty route loads the actual app shell');
     await context.setOffline(true);
     await page.reload({waitUntil:'domcontentloaded',timeout:30000});
     await page.locator('#app-frame.ready').waitFor({timeout:30000});
