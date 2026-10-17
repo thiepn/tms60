@@ -148,7 +148,9 @@ try{
   check(source.includes('Promise.allSettled(CORE.map'),'Install uses all-settled precaching');
   check(source.includes('previousCachedResponse'),'Previous-cache fallback is explicit');
   check(source.includes('precacheAsset'),'Per-asset precache isolation is explicit');
-  check(!source.includes('Promise.all(CORE.map'),'All-or-nothing CORE Promise.all removed');
+  const installSource=source.slice(source.indexOf("self.addEventListener('install'"),source.indexOf("self.addEventListener('activate'"));
+  check(!installSource.includes('Promise.all(CORE.map'),
+    'Install avoids all-or-nothing CORE Promise.all; status enumeration is permitted');
   check(!source.includes('Failed to precache'),'Single asset failure no longer throws the old fatal precache error');
 
   const freshHarness=makeServiceWorkerHarness(source,expectedCache,{failedPath:'./app.html'});
