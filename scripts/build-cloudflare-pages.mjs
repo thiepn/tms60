@@ -6,6 +6,20 @@ import {fileURLToPath} from 'node:url';
 import {createHash, randomUUID} from 'node:crypto';
 
 const EXT=new Set(['.html','.js','.json','.svg','.png','.webmanifest','.css','.ico','.webp','.woff2']);
+// Explicitly approved browser surface. A newly added root .js/.json/.html
+// must be reviewed and added here, not silently published to Pages.
+export const PUBLIC_ROOT=new Set([
+  'account-sync.js','app.html','enhancements-core.js','enhancements-legacy.js',
+  'enhancements.js','favicon.svg','guided-learning-chain.js','hub-entry.js',
+  'icon-192.png','icon-512.png','index.html','language-switch-hardening.js',
+  'localization-completion.js','localization-runtime.js','localization-safe.js',
+  'manifest.webmanifest','niv-service.json','p2-5-shell-runtime.js',
+  'p2-5-source-prep.js','p2-6-theme-sync.js','p2-8-localized-tts-reference.js',
+  'qol-cloze-helpers.js','qol-fast-recall.js','qol-word-navigation.js',
+  'rc3-hardening.js','recall-reference-fix.js','runtime-translation-switch.js',
+  'sw.js','translations.js','typo-scoring-finalizer.js','typo-tolerance.js',
+  'ux-patch-core.js','ux-patch.js'
+]);
 const REQUIRED=['index.html','app.html','sw.js','manifest.webmanifest','niv-service.json','translations.js',
   'account-sync.js','icon-192.png','icon-512.png','vendor/supabase-2.116.0.js','vendor/LICENSE.supabase'];
 export const HEADERS=[
@@ -48,13 +62,14 @@ export async function stageStaticSite(root=process.cwd(),{beforePublish}={}){
     const ext='.'+entry.name.split('.').at(-1).toLowerCase();
     if(!EXT.has(ext))continue;
     check(entry.isFile()&&!entry.isSymbolicLink(),'unsafe root public asset '+entry.name);
-    check(!['package.json','package-lock.json'].includes(entry.name),'npm metadata must not be served');
+    check(PUBLIC_ROOT.has(entry.name),'unreviewed root web asset: '+entry.name);
     files.push(entry.name);
   }
   const vendor=await lstat(join(root,'vendor'));
   check(vendor.isDirectory()&&!vendor.isSymbolicLink(),'vendored runtime folder must not be a symlink');
   files.push('vendor/supabase-2.116.0.js','vendor/LICENSE.supabase');
   const selected=[...new Set(files)].sort();
+  for(const name of PUBLIC_ROOT)check(selected.includes(name),'approved browser asset missing: '+name);
   for(const name of REQUIRED)check(selected.includes(name),'missing '+name);
   for(const name of selected)await isSafeFile(join(root,name));
   const workerSource=await readFile(join(root,'sw.js'),'utf8');
@@ -89,15 +104,15 @@ export async function stageStaticSite(root=process.cwd(),{beforePublish}={}){
     if(name.includes('/'))await mkdir(join(temp,name.split('/')[0]),{recursive:true});
     await copyFile(source,target);
   }
-  // A deterministic build-bound manifest lets the worker reject complete but
-  // mixed-generation Cloudflare responses. It deliberately hashes original
-  // public CORE files, not private user data or remote APIs.
+  // Seal every approved public runtime asset, not just the offline CORE.
+  // Non-CORE JavaScript and manifest updates must not mix release generations.
+  // sw.js is excluded to avoid a self-hash cycle; it commits to this manifest.
   const assets={};
-  for(const name of [...new Set(core.map(x=>x==='./'?'index.html':x.slice(2)))].sort()){
+  for(const name of selected.filter(x=>x!=='sw.js')){
     const bytes=await readFile(join(temp,name));
     assets[name]=createHash('sha256').update(bytes).digest('hex');
   }
-  // Source + all precached bytes determine a distinct versioned cache.
+  // Source + all public runtime bytes determine a distinct versioned cache.
   // This avoids cache collisions when Cloudflare serves a different rollout.
   const fingerprint=createHash('sha256').update(workerSource)
     .update(JSON.stringify(assets)).digest('hex').slice(0,16);

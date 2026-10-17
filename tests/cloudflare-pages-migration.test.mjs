@@ -4,7 +4,7 @@ import {cp, mkdtemp, mkdir, writeFile, readFile, readdir, rm, symlink} from 'nod
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {createHash} from 'node:crypto';
-import {stageStaticSite,HEADERS} from '../scripts/build-cloudflare-pages.mjs';
+import {stageStaticSite,HEADERS,PUBLIC_ROOT} from '../scripts/build-cloudflare-pages.mjs';
 const ROOT=resolve('.');
 const REQUIRED=['index.html','app.html','sw.js','manifest.webmanifest','niv-service.json','translations.js',
   'account-sync.js','icon-192.png','icon-512.png','vendor/supabase-2.116.0.js','vendor/LICENSE.supabase'];
@@ -13,7 +13,7 @@ async function fixture(){
   await mkdir(join(dir,'vendor'));
   const sw=await readFile(join(ROOT,'sw.js'),'utf8');
   const core=JSON.parse('['+sw.match(/const CORE=\[([^\]]+)\]/)?.[1].replaceAll("'",'"')+']');
-  const fixtures=[...new Set([...REQUIRED,...core.filter(x=>x!=='./').map(x=>x.slice(2))])];
+  const fixtures=[...new Set([...REQUIRED,...PUBLIC_ROOT,...core.filter(x=>x!=='./').map(x=>x.slice(2))])];
   for(const f of fixtures){
     if(f.includes('/'))await mkdir(join(dir,f.split('/')[0]),{recursive:true});
     await cp(join(ROOT,f),join(dir,f));
@@ -26,11 +26,14 @@ test('static stage only includes browser files, not CNAME, SQL, worker or GitHub
     await writeFile(join(root,'CNAME'),'tms60.thiepn.dev');
     await writeFile(join(root,'README.md'),'not for public stage');
     for(const folder of ['supabase','worker','.github','tests','scripts'])await mkdir(join(root,folder));
+    // Newly introduced files must be explicitly reviewed before publication.
     await writeFile(join(root,'extra.js'),'window.extra=true');
+    await assert.rejects(stageStaticSite(root),/unreviewed root web asset: extra.js/);
+    await rm(join(root,'extra.js'));
     const stage=await stageStaticSite(root);
     for(const f of REQUIRED)assert.ok(stage.files.includes(f),'missing staged '+f);
     for(const f of ['CNAME','README.md','supabase','worker','.github','tests','scripts'])assert.ok(!stage.files.includes(f));
-    assert.ok(stage.files.includes('extra.js'));
+    assert.ok(!stage.files.includes('extra.js'));
     assert.equal(await readFile(join(root,'dist','_headers'),'utf8'),HEADERS);
     assert.ok(stage.files.includes('tms60-integrity.json'));
     assert.ok(stage.files.includes('404.html'));
@@ -41,6 +44,11 @@ test('static stage only includes browser files, not CNAME, SQL, worker or GitHub
     assert.equal(createHash('sha256').update(integrity).digest('hex'),commitment);
     assert.equal(JSON.parse(integrity).assets['app.html'],
       createHash('sha256').update(await readFile(join(root,'app.html'))).digest('hex'));
+    for(const name of ['localization-safe.js','recall-reference-fix.js','vendor/LICENSE.supabase']){
+      assert.equal(JSON.parse(integrity).assets[name],
+        createHash('sha256').update(await readFile(join(root,name))).digest('hex'),
+        'Non-CORE public asset must be release-sealed '+name);
+    }
     const hashes=(await readFile(join(root,'dist','SHA256SUMS'),'utf8')).trim().split('\n');
     assert.ok(hashes.length>=REQUIRED.length+1);
     for(const row of hashes){

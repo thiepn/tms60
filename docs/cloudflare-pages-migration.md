@@ -320,3 +320,28 @@ This does NOT prove an actual DNS/TLS cutover or physical WebAPK rollback.
 
 As before: NO production deployment, domain change, OAuth configuration,
 secrets, Supabase, Bible Worker or other remote writes are authorized.
+
+## Reviewed public asset inventory and runtime release coherence
+
+Static staging now uses `PUBLIC_ROOT`, an explicitly reviewed inventory of
+the 33 original root browser assets, rather than publishing any new `.js`,
+`.json` or `.html` file just because its extension looks public. New or
+missing root assets stop the build until deliberately reviewed. The original
+vendored Supabase browser distribution and its license remain included;
+Worker source, SQL, credentials, GitHub config and private files stay outside
+the static artifact. The explicit inventory also prevents source-only helper
+scripts added to the root from silently becoming public at the Pages edge.
+
+The sealed runtime manifest now covers every selected public browser asset
+except `sw.js` itself (self-hash cycle), not merely precached CORE. The staged
+service worker checks network-first public responses, including the PWA
+manifest and non-CORE scripts, against those build-fixed digests before
+serving or caching. Mixed-generation HTTP 200 responses cannot overwrite
+the pinned manifest or execute an unreviewed script. The worker preserves
+its original source/GitHub Pages behavior when the staged hash is absent.
+Original root PWA ID, URL, Supabase Account, Bible Worker and all user-owned
+data remain untouched. Node VM tests cover corrupted network-first manifest,
+non-CORE script contamination and verified offline fallbacks.
+
+This remains locally qualified source behavior, not proof of a live CDN
+deployment, production cutover, signed-in OAuth, device WebAPK or real TLS.

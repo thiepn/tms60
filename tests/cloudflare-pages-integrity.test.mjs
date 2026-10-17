@@ -16,8 +16,11 @@ assert.equal(release.schema,1);
 assert.equal(release.cache,cache);
 const core=JSON.parse('['+sw.match(/const CORE=\[([^\]]+)\]/)?.[1].replaceAll("'",'"')+']');
 const paths=[...new Set(core.map(p=>p==='./'?'index.html':p.slice(2)))];
-assert.deepEqual(Object.keys(release.assets).sort(),[...paths].sort());
-for(const path of paths){
+assert.ok(Object.keys(release.assets).length>=paths.length,
+  'Integrity manifest covers at least all original offline CORE');
+for(const path of Object.keys(release.assets)){
+  assert.ok(paths.includes(path)||['localization-safe.js','recall-reference-fix.js',
+    'vendor/LICENSE.supabase'].includes(path),'Unexpected public asset '+path);
   const hash=createHash('sha256').update(readFileSync(join(root,path))).digest('hex');
   assert.equal(release.assets[path],hash,'Recorded CORE hash mismatch '+path);
 }
@@ -47,7 +50,7 @@ function simulate({previous=false,tamper='',manifestTamper=false,manifestMissing
     if(url.pathname==='/index.html'||url.pathname==='/app.html')
       return new Response(null,{status:308,headers:{Location:url.pathname==='/app.html'?'/app':'/'}});
     let name=url.pathname==='/'?'index.html':url.pathname==='/app'?'app.html':url.pathname.slice(1);
-    if(!paths.includes(name))return new Response('Not found',{status:404});
+    if(!Object.hasOwn(release.assets,name))return new Response('Not found',{status:404});
     const payload=activeTamper===name?Buffer.from('MISMATCH-BUT-HTTP-200'):readFileSync(join(root,name));
     return new Response(payload,{status:200});
   };
@@ -61,13 +64,16 @@ function simulate({previous=false,tamper='',manifestTamper=false,manifestMissing
     setOffline(next){offline=next},
     async fetchPath(path){
       let response;
+      const pending=[];
       handlers.get('fetch')({
         request:new Request(new URL(path,origin)),
         respondWith(next){response=Promise.resolve(next)},
-        waitUntil(){}
+        waitUntil(next){pending.push(Promise.resolve(next))}
       });
       assert.ok(response,'Service worker did not handle '+path);
-      return response;
+      const delivered=await response;
+      await Promise.all(pending);
+      return delivered;
     },
     async message(type){
       let reply;
@@ -125,6 +131,31 @@ verified.setOffline(true);
 assert.equal((await verified.message('TMS60_OFFLINE_STATUS')).ready,true,
   'Verified manifest survives offline worker restarts and status checks');
 verified.setOffline(false);
+
+// Manifest remains network-first only when it matches the exact pinned build.
+// An HTTP 200 from an alternate Pages rollout is neither returned nor cached.
+const pinnedManifest=await verified.fetchPath('manifest.webmanifest');
+assert.equal(pinnedManifest.ok,true);
+verified.setTamper('manifest.webmanifest');
+const mismatchManifest=await verified.fetchPath('manifest.webmanifest');
+assert.equal(mismatchManifest.ok,true,'Pinned manifest should survive mixed-generation HTTP 200');
+assert.equal(await mismatchManifest.text(),await pinnedManifest.text());
+verified.setOffline(true);
+assert.equal((await verified.fetchPath('manifest.webmanifest')).ok,true,
+  'Pinned manifest remains available offline after attempted cache poisoning');
+verified.setOffline(false);
+
+// A non-CORE original runtime script must also be protected from an altered
+// CDN generation. The response must fail closed if no trusted cache exists.
+verified.setTamper('localization-safe.js');
+assert.equal((await verified.fetchPath('localization-safe.js')).type,'error',
+  'Non-CORE script cannot execute from an unverified staged release');
+verified.setTamper('');
+assert.equal((await verified.fetchPath('localization-safe.js')).ok,true);
+verified.setTamper('localization-safe.js');
+assert.equal((await verified.fetchPath('localization-safe.js')).ok,true,
+  'A verified cached dynamic module survives a mixed-release response');
+verified.setTamper('');
 
 // Without its sealed manifest, even cached code must fail closed rather
 // than trusting an unauthenticated current-edge manifest.

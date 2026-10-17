@@ -40,10 +40,14 @@ async function loadExpectedRelease({offlineOnly=false}={}){
   if(manifest.schema!==1||manifest.cache!==CACHE||!manifest.assets||typeof manifest.assets!=='object')
     throw new Error('Staged manifest has incorrect version or schema.');
   const required=new Set(CORE.map(path=>path==='./'?'index.html':path.slice(2)));
-  if(Object.keys(manifest.assets).length!==required.size)
-    throw new Error('Staged manifest asset count differs from installed CORE.');
+  if(Object.keys(manifest.assets).length<required.size)
+    throw new Error('Staged manifest asset count is smaller than installed CORE.');
+  for(const [path,hash] of Object.entries(manifest.assets))
+    if(!/^[a-zA-Z0-9._/-]+$/.test(path)||path.includes('..')||!path||
+      !/^[a-f0-9]{64}$/.test(hash))
+      throw new Error('Staged manifest contains unsafe asset or digest: '+path);
   for(const path of required)
-    if(!/^[a-f0-9]{64}$/.test(manifest.assets[path]||''))
+    if(!manifest.assets[path])
       throw new Error('Required staged asset is missing an integrity digest: '+path);
   // The signed-by-build digest commitment is embedded in the installed SW.
   // Persist the verified manifest in THIS release cache so that worker restarts
@@ -63,7 +67,41 @@ async function cachedResponse(request){
   return cache.match(request);
 }
 
+// A staged version is immutable even for assets normally fetched
+// network-first (including manifest and dynamically loaded script modules).
+// Reject mixed-generation 200s instead of caching or executing them.
 function networkFirst(request,event,{navigation=false}={}){
+  if(!RELEASE_INTEGRITY_SHA256)
+    return networkFirstUnsealed(request,event,{navigation});
+  return (async()=>{
+    const expected=await loadExpectedRelease({offlineOnly:true});
+    const path=new URL(request.url).pathname.slice(ROOT_PATH.length);
+    const digest=expected[path];
+    if(!digest){
+      if(/\.(?:js|json|html|css|webmanifest)$/.test(path))
+        return Response.error();
+      return networkFirstUnsealed(request,event,{navigation});
+    }
+    const valid=async response=>Boolean(response&&response.ok&&
+      response.type!=='opaque'&&!response.redirected&&
+      await digestHex(await response.clone().arrayBuffer())===digest);
+    try{
+      const response=await fetch(new Request(request,{cache:'no-cache'}));
+      if(await valid(response)){
+        event.waitUntil(cacheSuccessful(request,response));
+        return response;
+      }
+    }catch(_){/* A network mismatch must never replace the pinned cache. */}
+    const cached=await cachedResponse(request);
+    if(await valid(cached))return cached;
+    if(path==='manifest.webmanifest'){
+      const pinned=await cachedResponse(new Request(new URL('./manifest.webmanifest',self.location.href)));
+      if(await valid(pinned))return pinned;
+    }
+    return Response.error();
+  })().catch(()=>Response.error());
+}
+function networkFirstUnsealed(request,event,{navigation=false}={}){
   const network=fetch(new Request(request,{cache:'no-cache'}));
   event.waitUntil(network.then(response=>cacheSuccessful(request,response)).catch(()=>{}));
   return network.then(async response=>{
