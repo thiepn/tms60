@@ -88,7 +88,7 @@ test('rejects malformed embedded artwork without overwriting a valid staged rele
     await stageStaticSite(root);
     const before=await readFile(join(root,'dist','SHA256SUMS'));
     await writeFile(join(root,'favicon.svg'),'<svg><image href="data:image/png;base64,INVALID"/></svg>');
-    await assert.rejects(stageStaticSite(root),/Expected exactly one embedded source-owned PNG artwork/);
+    await assert.rejects(stageStaticSite(root),/PNG signature invalid/);
     assert.deepEqual(await readFile(join(root,'dist','SHA256SUMS')),before);
   }finally{await rm(root,{recursive:true,force:true})}
 });
