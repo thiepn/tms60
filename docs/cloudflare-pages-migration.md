@@ -90,3 +90,32 @@ CI, local Chromium, staging builder: pending exact-head workflow evidence.
 Cloudflare Pages deploy, live preview, live OAuth callback on new host,
 real cross-origin translation preview, physical Android WebAPK,
 production cutover and tested rollback: NOT TESTED.
+
+## PR #23 source reconciliation / PWA recovery
+
+PR #23 head `56f755d4eff51d40c1b0cd58e2d1247d54a807e6`
+was compared against source main. Its full PWA engine cannot be copied onto
+this branch because it depends on unmerged `native-pwa.js` and separate P1/P2
+artifacts. This branch instead adapts only its compatible SW protocol:
+
+- Active HTML/JS and root navigation are served from a canonical version-pinned
+  app cache (URL query parameters cannot mix code or cached icons). Dynamic
+  non-core resources remain network-first and the manifest remains network-first.
+- A replacement SW installs fully online or aborts, deleting its candidate
+  cache without replacing the old installed offline bundle. Old clients are
+  not force-activated; activation cleans only old TMS60 cache namespaces.
+- First-install partial downloads can still recover. MessageChannel
+  TMS60_OFFLINE_STATUS / TMS60_PREPARE_OFFLINE report actual complete/incomplete
+  asset readiness; no synthetic mastery or local state rewriting.
+- Tests use original main PWA files and a VM fake cache/network to exercise
+  interrupted HTTP 503/network update, cache integrity, version pinning and
+  delayed activation, plus real staged desktop/mobile Chromium offline boot.
+- The **separately owned P1/P2 native installer features** and true physical
+  Android behavior remain out of scope and NOT TESTED, not silently replaced.
+
+Cloudflare staging now verifies every SW CORE entry is actually in dist,
+guards symlinked vendor paths and assets above Cloudflare Pages Free 25 MiB
+per-asset limit, and generates a reproducible SHA256SUMS for reviewers.
+This artifact checksum detects corrupted staged bytes but does not prove
+that an online future edge deployment is atomically distributed, nor does
+it replace real staging acceptance.

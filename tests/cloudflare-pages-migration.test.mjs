@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {cp, mkdtemp, mkdir, writeFile, readFile, readdir, rm, symlink} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
+import {createHash} from 'node:crypto';
 import {stageStaticSite,HEADERS} from '../scripts/build-cloudflare-pages.mjs';
 const ROOT=resolve('.');
 const REQUIRED=['index.html','app.html','sw.js','manifest.webmanifest','niv-service.json','translations.js',
@@ -10,7 +11,13 @@ const REQUIRED=['index.html','app.html','sw.js','manifest.webmanifest','niv-serv
 async function fixture(){
   const dir=await mkdtemp(join(tmpdir(),'tms60-cf-'));
   await mkdir(join(dir,'vendor'));
-  for(const f of REQUIRED)await cp(join(ROOT,f),join(dir,f));
+  const sw=await readFile(join(ROOT,'sw.js'),'utf8');
+  const core=JSON.parse('['+sw.match(/const CORE=\[([^\]]+)\]/)?.[1].replaceAll("'",'"')+']');
+  const fixtures=[...new Set([...REQUIRED,...core.filter(x=>x!=='./').map(x=>x.slice(2))])];
+  for(const f of fixtures){
+    if(f.includes('/'))await mkdir(join(dir,f.split('/')[0]),{recursive:true});
+    await cp(join(ROOT,f),join(dir,f));
+  }
   return dir;
 }
 test('static stage only includes browser files, not CNAME, SQL, worker or GitHub workflow',async()=>{
@@ -25,6 +32,14 @@ test('static stage only includes browser files, not CNAME, SQL, worker or GitHub
     for(const f of ['CNAME','README.md','supabase','worker','.github','tests','scripts'])assert.ok(!stage.files.includes(f));
     assert.ok(stage.files.includes('extra.js'));
     assert.equal(await readFile(join(root,'dist','_headers'),'utf8'),HEADERS);
+    const hashes=(await readFile(join(root,'dist','SHA256SUMS'),'utf8')).trim().split('\n');
+    assert.ok(hashes.length>=REQUIRED.length+1);
+    for(const row of hashes){
+      const match=/^([a-f0-9]{64})  (.+)$/.exec(row);
+      assert.ok(match,'invalid checksum row');
+      const bytes=await readFile(join(root,'dist',match[2]));
+      assert.equal(createHash('sha256').update(bytes).digest('hex'),match[1]);
+    }
     assert.deepEqual(await readFile(join(root,'dist','app.html')),await readFile(join(root,'app.html')));
     const before=await readdir(join(root,'dist'));
     await stageStaticSite(root);
@@ -52,6 +67,13 @@ test('refuses asset/output symlinks',async()=>{
     await symlink('index.html',join(root,'unexpected.js'));
     await assert.rejects(stageStaticSite(root),/unsafe root public asset/);
     await rm(join(root,'unexpected.js'));
+    await rm(join(root,'vendor'),{recursive:true});
+    await symlink(ROOT+'/vendor',join(root,'vendor'));
+    await assert.rejects(stageStaticSite(root),/vendored runtime folder/);
+    await rm(join(root,'vendor'));
+    await mkdir(join(root,'vendor'));
+    await cp(join(ROOT,'vendor/supabase-2.116.0.js'),join(root,'vendor/supabase-2.116.0.js'));
+    await cp(join(ROOT,'vendor/LICENSE.supabase'),join(root,'vendor/LICENSE.supabase'));
     await symlink('vendor',join(root,'dist'));
     await assert.rejects(stageStaticSite(root),/dist is symlink/);
   }finally{await rm(root,{recursive:true,force:true})}

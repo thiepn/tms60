@@ -22,7 +22,9 @@ jobs:
           node --check scripts/build-cloudflare-pages.mjs
           node --check tests/cloudflare-pages-migration.test.mjs
           node --check tests/cloudflare-pages-local-smoke.mjs
+          node --check tests/cloudflare-pages-sw-recovery.test.mjs
           node --test tests/cloudflare-pages-migration.test.mjs
+          node --test tests/cloudflare-pages-sw-recovery.test.mjs
           node tests/pwa-install-metadata-regression.mjs
           node tests/supabase-account-sync-regression.mjs
           node --test tests/supabase-account-sync-runtime.test.mjs
@@ -36,7 +38,9 @@ jobs:
           test -f dist/app.html
           test -f dist/sw.js
           test -f dist/manifest.webmanifest
-          (cd dist && find . -type f -print0 | sort -z | xargs -0 sha256sum)
+          (cd dist && sha256sum -c SHA256SUMS)
+          test -f dist/_headers
+          test -f dist/SHA256SUMS
       - name: Locally test staged desktop and mobile Chromium
         run: |
           npm install --no-save playwright@1.55.0

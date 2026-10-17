@@ -33,7 +33,36 @@ try{
     assert.equal(actual.manifest.start_url,'/');
     assert.equal(actual.manifest.id,'/');
     assert.equal(actual.proxy.baseUrl,'https://tms60-niv-api.thiepn.workers.dev');
-    console.log('PASS',mobile?'mobile':'desktop','PWA, root shell, local-origin persistence, API configuration');
+    const workerState=await page.evaluate(async()=>{
+      const registration=await navigator.serviceWorker.ready;
+      if(!registration.active)throw Error('No active offline worker');
+      const channel=new MessageChannel();
+      return Promise.race([
+        new Promise((resolve,reject)=>{
+          channel.port1.onmessage=event=>resolve(event.data);
+          registration.active.postMessage({type:'TMS60_OFFLINE_STATUS'},[channel.port2]);
+        }),
+        new Promise((_,reject)=>setTimeout(()=>reject(Error('Offline status did not reply')),8000))
+      ]);
+    });
+    assert.equal(workerState.ok,true);
+    assert.equal(workerState.ready,true,'First complete static stage must cache every file');
+    assert.equal(workerState.cached,workerState.total);
+    await context.setOffline(true);
+    await page.reload({waitUntil:'domcontentloaded',timeout:30000});
+    await page.locator('#app-frame.ready').waitFor({timeout:30000});
+    const offline=await page.evaluate(async()=>{
+      const asset=await fetch('/app.html?v=previous');
+      return {state:localStorage.getItem('tms60-cloudflare-review-probe'),
+        active:localStorage.getItem('tms60-active-translation-v1'),
+        assetOk:asset.ok,bytes:(await asset.arrayBuffer()).byteLength};
+    });
+    assert.equal(offline.state,'persisted');
+    assert.equal(offline.active,'esv');
+    assert.equal(offline.assetOk,true);
+    assert.ok(offline.bytes>1000,'Offline pinned app source must remain available');
+    await context.setOffline(false);
+    console.log('PASS',mobile?'mobile':'desktop','PWA offline boot, complete cache, original identity, storage, proxy config');
     await context.close();
   }
 }finally{await browser.close()}
