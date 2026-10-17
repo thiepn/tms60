@@ -24,6 +24,7 @@ jobs:
           node --check tests/cloudflare-pages-local-smoke.mjs
           node --check tests/cloudflare-pages-sw-recovery.test.mjs
           node --check tests/cloudflare-pages-integrity.test.mjs
+          node --check tests/cloudflare-pages-browser-transition.mjs
           node --check scripts/check-cloudflare-preview.mjs
           node --test tests/cloudflare-pages-migration.test.mjs
           node --test tests/cloudflare-pages-sw-recovery.test.mjs
@@ -59,6 +60,7 @@ jobs:
           node tests/cloudflare-pages-local-smoke.mjs
           TMS60_TEST_URL=http://127.0.0.1:4173/ node tests/p2-3-service-worker-strategy.mjs
           TMS60_TEST_URL=http://127.0.0.1:4173/ node tests/p2-4-resilient-precache.mjs
+          node tests/cloudflare-pages-browser-transition.mjs
       - name: Upload non-deployed reviewer artifact only
         uses: actions/upload-artifact@v4
         with:

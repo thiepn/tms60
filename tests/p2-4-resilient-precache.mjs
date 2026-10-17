@@ -104,7 +104,12 @@ function makeServiceWorkerHarness(source,currentCache,{failedPath,oldFallback=fa
     async skipWaiting(){skipWaitingCalled=true},
     clients:{async claim(){}}
   };
-  vm.runInNewContext(source,{
+  // The historical P2-4 harness tests source-only update resilience.
+  // Stage manifest/WebCrypto checks run separately against the actual dist SW
+  // in cloudflare-pages-integrity.test.mjs. Do not treat them as this mock.
+  const legacySource=source.replace(/const RELEASE_INTEGRITY_SHA256='[a-f0-9]{64}';/,
+    'const RELEASE_INTEGRITY_SHA256=null;');
+  vm.runInNewContext(legacySource,{
     self:selfMock,
     location:selfMock.location,
     caches:cachesMock,
