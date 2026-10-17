@@ -20,7 +20,7 @@ const server=createServer(async(req,res)=>{
   let pathname;
   try{pathname=new URL(req.url||'/', 'http://127.0.0.1').pathname}
   catch(_){res.writeHead(400);res.end();return}
-  if(!/^\/[a-zA-Z0-9/._-]+$/.test(pathname)||pathname.includes('..')){
+  if(!/^\/[a-zA-Z0-9/._-]*$/.test(pathname)||pathname.includes('..')){
     res.writeHead(404);res.end();return;
   }
   // Pages automatic .html -> extensionless redirect, including index.html.

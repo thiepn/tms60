@@ -61,6 +61,7 @@ jobs:
             if curl -fsS http://127.0.0.1:4173/ >/dev/null; then break; fi
             sleep 1
           done
+          curl -fsS http://127.0.0.1:4173/ >/dev/null
           test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4173/app.html)" = "308"
           test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4173/app)" = "200"
           TMS60_PREVIEW_URL=http://127.0.0.1:4173/ node scripts/check-cloudflare-preview.mjs
