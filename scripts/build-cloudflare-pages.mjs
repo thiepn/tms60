@@ -4,6 +4,7 @@ import {readdir, readFile, copyFile, mkdir, lstat, rm, writeFile, rename, mkdtem
 import {resolve, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash, randomUUID} from 'node:crypto';
+import {rebuildPwaIcons} from './pwa-icon-raster.mjs';
 
 const EXT=new Set(['.html','.js','.json','.svg','.png','.webmanifest','.css','.ico','.webp','.woff2']);
 // Explicitly approved browser surface. A newly added root .js/.json/.html
@@ -104,6 +105,9 @@ export async function stageStaticSite(root=process.cwd(),{beforePublish}={}){
     if(name.includes('/'))await mkdir(join(temp,name.split('/')[0]),{recursive:true});
     await copyFile(source,target);
   }
+  // Original PNG icon bytes are corrupt. Rebuild exact artwork from the valid
+  // source-owned favicon.svg, then seal the repaired raster output.
+  await rebuildPwaIcons(temp,join(root,'favicon.svg'));
   // Seal every approved public runtime asset, not just the offline CORE.
   // Non-CORE JavaScript and manifest updates must not mix release generations.
   // sw.js is excluded to avoid a self-hash cycle; it commits to this manifest.
