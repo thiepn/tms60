@@ -77,7 +77,7 @@ test('rejects app-identity, translation-API and service worker drift',async()=>{
     await assert.rejects(stageStaticSite(root),/Bible Worker endpoint/);
     await cp(join(ROOT,'niv-service.json'),join(root,'niv-service.json'));
     await rm(join(root,'sw.js'));
-    await assert.rejects(stageStaticSite(root),/missing sw.js/);
+    await assert.rejects(stageStaticSite(root),/missing sw.js|approved browser asset missing: sw.js/);
     await cp(join(ROOT,'sw.js'),join(root,'sw.js'));
     await rm(join(root,'enhancements-core.js'));
     await assert.rejects(stageStaticSite(root),/PWA offline dependency not staged/);
