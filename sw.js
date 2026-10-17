@@ -226,11 +226,26 @@ self.addEventListener('activate',event=>{
 self.addEventListener('fetch',event=>{
   const req=event.request;if(req.method!=='GET')return;
   const url=new URL(req.url);if(url.origin!==location.origin)return;
-  if(req.headers.has('range')){event.respondWith(fetch(req));return}
+  // An integrity-sealed release must not let partial/ranged requests bypass
+  // pinned response verification. Unknown media may retain original Range I/O.
+  if(req.headers.has('range')){
+    if(!RELEASE_INTEGRITY_SHA256){event.respondWith(fetch(req));return}
+    event.respondWith((async()=>{
+      const expected=await loadExpectedRelease({offlineOnly:true});
+      const path=url.pathname===PRETTY_APP_PATH?'app.html':
+        url.pathname===ROOT_PATH?'index.html':url.pathname.slice(ROOT_PATH.length);
+      if(Object.hasOwn(expected,path))return Response.error();
+      return fetch(req);
+    })().catch(()=>Response.error()));
+    return;
+  }
+  // Pages serves the app.html bytes at /app. Both navigation and fetch()
+  // must be mapped to the original pinned CORE entry; otherwise non-navigation
+  // /app would enter the generic unverified network-first branch.
+  if(RELEASE_INTEGRITY_SHA256&&url.pathname===PRETTY_APP_PATH){
+    event.respondWith(cacheFirst(new Request(new URL('./app.html',self.location.href))));return;
+  }
   if(req.mode==='navigate'){
-    if(RELEASE_INTEGRITY_SHA256&&url.pathname===PRETTY_APP_PATH){
-      event.respondWith(cacheFirst(new Request(new URL('./app.html',self.location.href))));return;
-    }
     if(url.pathname===ROOT_PATH||PRECACHE_PATHS.has(url.pathname)){
       event.respondWith(cacheFirst(canonicalShellRequest(url)));return;
     }

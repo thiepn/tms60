@@ -62,11 +62,11 @@ function simulate({previous=false,tamper='',manifestTamper=false,manifestMissing
     stores,get skips(){return skips},
     setTamper(next){activeTamper=next},
     setOffline(next){offline=next},
-    async fetchPath(path){
+    async fetchPath(path,options={}){
       let response;
       const pending=[];
       handlers.get('fetch')({
-        request:new Request(new URL(path,origin)),
+        request:new Request(new URL(path,origin),options),
         respondWith(next){response=Promise.resolve(next)},
         waitUntil(next){pending.push(Promise.resolve(next))}
       });
@@ -99,13 +99,26 @@ assert.equal(verified.stores.get(cache).size,core.length+1,
   'Candidate cache includes CORE and its independently verified manifest');
 const staged=verified.stores.get(cache);
 assert.equal((await verified.fetchPath('/app')).ok,true,
-  'Cloudflare pretty /app navigation must use the pinned original app.html cache');
+  'Cloudflare pretty /app fetch must use the pinned original app.html cache');
+verified.setTamper('app.html');
+const pinnedPretty=await verified.fetchPath('/app');
+assert.equal(pinnedPretty.ok,true,'Mixed-release pretty /app response must not replace CORE');
+assert.equal(Buffer.from(await pinnedPretty.arrayBuffer()).equals(readFileSync(join(root,'app.html'))),true,
+  'Non-navigation /app returns exact installed app bytes, never mixed CDN code');
+verified.setTamper('');
+for(const target of ['/app','/app.html','/index.html','/manifest.webmanifest',
+  '/localization-safe.js']){
+  const partial=await verified.fetchPath(target,{headers:{Range:'bytes=0-9'}});
+  assert.equal(partial.type,'error','Integrity-sealed asset must reject unverified partial request '+target);
+}
 assert.ok(staged.has('https://stage.example.test/tms60-integrity.json'));
 
 // A 200 OK response with bytes from a different rollout cannot refill a missing
 // installed code asset, including via the user-initiated offline repair flow.
 staged.delete('https://stage.example.test/app.html');
 verified.setTamper('app.html');
+assert.equal((await verified.fetchPath('/app')).type,'error',
+  'A missing app.html must not be reintroduced via the /app alias');
 const refused=await verified.fetchPath('app.html');
 assert.equal(refused.type,'error','Unverified cache miss must fail closed');
 assert.equal((await verified.message('TMS60_PREPARE_OFFLINE')).ready,false,

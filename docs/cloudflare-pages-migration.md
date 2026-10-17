@@ -345,3 +345,37 @@ non-CORE script contamination and verified offline fallbacks.
 
 This remains locally qualified source behavior, not proof of a live CDN
 deployment, production cutover, signed-in OAuth, device WebAPK or real TLS.
+
+## Final source routing boundary audit (October 17)
+
+Cloudflare Pages serves `app.html` at both its legacy filename
+(redirected) and the canonical `/app` route. A controlled
+`fetch('/app')` does not have navigation mode, so the previous staged
+worker erroneously sent it to the generic network-first handler.
+Unlike its navigation path, this could serve mixed-release HTML with
+HTTP 200 without validating the app's pinned digest. The staged worker
+now canonicalizes BOTH navigation and non-navigation `/app` requests
+through the same verified `app.html` cache path, keeping the old worker
+and root PWA untouched.
+
+Requests with a `Range` header previously bypassed all integrity checks
+by design to support normal media fetching. In an integrity-sealed release,
+a ranged request for a release-owned file can return an unverified partial
+body: its SHA-256 cannot be checked against the committed full-file digest.
+The staged worker now rejects ranged requests for any committed release
+asset (including `/app`), while retaining original direct ranged fetching
+for non-release media and for unsealed GitHub Pages builds.
+
+The exact staged-worker VM tests simulate a malicious HTTP-200 alternative
+`/app` response, an empty cached app shell and partial requests for shell,
+manifest and non-CORE modules. The real desktop/mobile Chromium transition
+also injects a mixed-release `/app` response after upgrade and verifies
+that only the installed shell is served, and that ranged `/app` fails closed.
+These tests prove local mock and browser behavior, NOT actual Pages edge
+consistency, TLS, sign-in, physical device installation or DNS cutover.
+
+The remaining milestones are entirely owner-authorized live staging:
+Pages project and isolated preview, exact HTTPS/edge acceptance, Worker
+CORS, exact approved Supabase OAuth callback with isolated test identity,
+installed physical Android WebAPK and real same-origin cutover/rollback.
+No production change is authorized by this draft PR.

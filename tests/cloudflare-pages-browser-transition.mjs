@@ -7,7 +7,7 @@ import {join,resolve,extname} from 'node:path';
 import {chromium} from 'playwright';
 
 const source=resolve('.'),stage=join(source,'dist');
-let mode='source';
+let mode='source',tamperPretty=false;
 const headersFor=path=>{
   const ext=extname(path);
   const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8',
@@ -30,6 +30,8 @@ const server=createServer(async(request,response)=>{
     let data=await readFile(join(mode==='source'?source:stage,file));
     if(mode==='source'&&file==='app.html')
       data=Buffer.concat([data,Buffer.from('\n<!-- TMS60_SOURCE_RELEASE -->\n')]);
+    if(mode==='stage'&&p==='/app'&&tamperPretty)
+      data=Buffer.from('<!doctype html><title>MIXED-RELEASE-SHELL</title>');
     response.writeHead(200,headersFor(file));response.end(data);
   }catch(_){response.writeHead(404,{'content-type':'text/plain'});response.end('Not found')}
 });
@@ -120,6 +122,23 @@ try{
     });
     assert.equal(pretty.ok,true,'Canonical Pages pretty /app route is usable');
     assert.equal(pretty.app,true,'Cloudflare pretty route loads the actual app shell');
+    tamperPretty=true;
+    try{
+      const protectedAliases=await page.evaluate(async()=>{
+        const content=await(await fetch('/app',{cache:'no-cache'})).text();
+        let rangedBlocked=false;
+        try{
+          await fetch('/app',{headers:{Range:'bytes=0-9'},cache:'no-cache'});
+        }catch(_){rangedBlocked=true}
+        return {content,rangedBlocked};
+      });
+      assert.ok(!protectedAliases.content.includes('MIXED-RELEASE-SHELL'),
+        'Non-navigation /app must not serve mismatched Pages HTML');
+      assert.ok(protectedAliases.content.includes('TMS Memory Lab'),
+        'Non-navigation /app remains tied to the installed version');
+      assert.equal(protectedAliases.rangedBlocked,true,
+        'Partial-range alias cannot bypass staged app hash verification');
+    }finally{tamperPretty=false}
     await context.setOffline(true);
     await page.reload({waitUntil:'domcontentloaded',timeout:30000});
     await page.locator('#app-frame.ready').waitFor({timeout:30000});
