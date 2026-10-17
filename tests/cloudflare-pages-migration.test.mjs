@@ -80,7 +80,7 @@ test('rejects app-identity, translation-API and service worker drift',async()=>{
     await assert.rejects(stageStaticSite(root),/missing sw.js|approved browser asset missing: sw.js/);
     await cp(join(ROOT,'sw.js'),join(root,'sw.js'));
     await rm(join(root,'enhancements-core.js'));
-    await assert.rejects(stageStaticSite(root),/PWA offline dependency not staged/);
+    await assert.rejects(stageStaticSite(root),/PWA offline dependency not staged|approved browser asset missing: enhancements-core.js/);
   }finally{await rm(root,{recursive:true,force:true})}
 });
 test('content changes create a different staged worker cache identity without altering source',async()=>{
