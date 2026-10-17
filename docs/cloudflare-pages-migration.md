@@ -119,3 +119,66 @@ per-asset limit, and generates a reproducible SHA256SUMS for reviewers.
 This artifact checksum detects corrupted staged bytes but does not prove
 that an online future edge deployment is atomically distributed, nor does
 it replace real staging acceptance.
+
+
+## Integrity and read-only preview qualification (migration batch October 17)
+
+The **staged** `dist/sw.js` has a SHA-256 commitment to
+`dist/tms60-integrity.json`. The manifest contains exact SHA-256 digests
+for every original service-worker CORE file; `./` resolves to index.html
+with the same digest. On staged installation, the worker checks its manifest
+commitment before requesting CORE and checks every successful network
+response's actual bytes before caching. A 200 response from a different
+rollout is **not accepted**. Missing, stale or corrupt manifests and
+incomplete staged installs abort and delete the candidate cache; existing
+TMS60 caches are retained. Original `sw.js` retains a null integrity
+sentinel for non-Cloudflare/GitHub Pages builds. This deliberately avoids
+rewriting the account, local progress or existing Google Auth contracts.
+
+Staging also creates a minimal `404.html` to prevent Pages' SPA fallback
+from falsely returning HTTP 200 for missing assets; a deterministic
+`SHA256SUMS` hashes all staged output files except the checksum file.
+The `_headers` and origin-owned app shell are unchanged in authority.
+The checksum is for reviewer verification, **not cryptographic signing or
+a guarantee that Cloudflare has deployed the asset set**. The build itself
+never contacts Cloudflare.
+
+### After a separately authorized preview exists
+
+Run the **read-only** checker with an explicit URL:
+`TMS60_PREVIEW_URL=https://<approved-project>.pages.dev/ node scripts/check-cloudflare-preview.mjs`
+(replace the illustrative hostname with the real approved preview origin).
+It rejects the production host, URLs with credentials, non-root paths,
+unexpected redirects, and unsupported origins. It checks staged hashes
+against the served preview, the worker's sealed manifest, PWA root identity,
+canonical hostname, Worker endpoint and CDN `no-store` rules, and verifies
+that known non-public paths return 404. It does not execute app scripts,
+access authenticated APIs, request OAuth, manipulate DNS or write data.
+Loopback acceptance is exercised automatically in CI.
+
+A `pages.dev` preview **cannot** establish the existing Bible Worker CORS
+or Google OAuth callback readiness. Signed-in staging needs an approved
+exact redirect URL and intentionally isolated test owner; do not weaken
+the Worker origin policy or allowlist all Pages preview subdomains.
+
+Cloudflare Pages can automatically deploy Git-integrated pushes. This
+branch does NOT create a project or attach a repository. Owner must later
+authorize preview creation, approve branch control, and verify that no
+Git-linked production publication starts unexpectedly.
+
+### Cutover/rollback evidence fields to fill before any DNS change
+
+- Source commit and checksum artifact, preview deployment ID and domain,
+  verified `SHA256SUMS` match and actual `sw.js`/manifest commitments
+- Current Cloudflare zone and TMS60 CNAME target `thiepn.github.io`,
+  `proxied=false`, TTL 600; hostname remains `tms60.thiepn.dev`
+- GitHub Pages last qualified release and rollback release artifact SHA,
+  owner-controlled rollback authorization and expected DNS/cache delay
+- Consent-backed browser export of local-only learning progress and all
+  original translation-specific keys; non-destructive restore rehearsal
+- Account OAuth exact production redirect, owner-scoped RLS/Supabase sync,
+  translation proxy CORS and original API.Bible license/rights
+- Browser installed PWA offline/update compatibility across host cutover
+  and genuine Android device evidence from the separate PWA PR #23 gate
+- Explicit human sign-off. **NOT TESTED/NO_GO** until independently verified
+  after preview authorization. Do not clear site data or migrate records.

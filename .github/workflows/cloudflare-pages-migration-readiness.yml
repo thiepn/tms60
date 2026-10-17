@@ -23,6 +23,8 @@ jobs:
           node --check tests/cloudflare-pages-migration.test.mjs
           node --check tests/cloudflare-pages-local-smoke.mjs
           node --check tests/cloudflare-pages-sw-recovery.test.mjs
+          node --check tests/cloudflare-pages-integrity.test.mjs
+          node --check scripts/check-cloudflare-preview.mjs
           node --test tests/cloudflare-pages-migration.test.mjs
           node --test tests/cloudflare-pages-sw-recovery.test.mjs
           node tests/pwa-install-metadata-regression.mjs
@@ -41,6 +43,9 @@ jobs:
           (cd dist && sha256sum -c SHA256SUMS)
           test -f dist/_headers
           test -f dist/SHA256SUMS
+          test -f dist/tms60-integrity.json
+          test -f dist/404.html
+          node --test tests/cloudflare-pages-integrity.test.mjs
       - name: Locally test staged desktop and mobile Chromium
         run: |
           npm install --no-save playwright@1.55.0
@@ -50,6 +55,7 @@ jobs:
             if curl -fsS http://127.0.0.1:4173/ >/dev/null; then break; fi
             sleep 1
           done
+          TMS60_PREVIEW_URL=http://127.0.0.1:4173/ node scripts/check-cloudflare-preview.mjs
           node tests/cloudflare-pages-local-smoke.mjs
           TMS60_TEST_URL=http://127.0.0.1:4173/ node tests/p2-3-service-worker-strategy.mjs
           TMS60_TEST_URL=http://127.0.0.1:4173/ node tests/p2-4-resilient-precache.mjs

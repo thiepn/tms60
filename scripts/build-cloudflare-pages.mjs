@@ -15,7 +15,8 @@ export const HEADERS=[
   '/','  Cache-Control: no-cache, must-revalidate','',
   '/app.html','  Cache-Control: no-cache, must-revalidate','',
   '/manifest.webmanifest','  Cache-Control: no-cache, must-revalidate','',
-  '/niv-service.json','  Cache-Control: no-store, no-cache, must-revalidate',''
+  '/niv-service.json','  Cache-Control: no-store, no-cache, must-revalidate','',
+  '/tms60-integrity.json','  Cache-Control: no-store, no-cache, must-revalidate',''
 ].join('\n');
 function check(ok,msg){if(!ok)throw Error('Static staging denied: '+msg)}
 async function isSafeFile(path){
@@ -45,6 +46,10 @@ export async function stageStaticSite(root=process.cwd()){
   for(const name of REQUIRED)check(selected.includes(name),'missing '+name);
   for(const name of selected)await isSafeFile(join(root,name));
   const workerSource=await readFile(join(root,'sw.js'),'utf8');
+  const buildCache=workerSource.match(/const CACHE='([^']+)'/)?.[1];
+  check(/^tms60-[a-z0-9-]+-\d{4}-\d{2}-\d{2}$/.test(buildCache||''),'SW release cache is not versioned');
+  const sentinel='const RELEASE_INTEGRITY_SHA256=null;';
+  check(workerSource.split(sentinel).length===2,'missing or repeated service-worker release sentinel');
   const coreMatch=workerSource.match(/const CORE=\[([^\]]+)\]/);
   check(Boolean(coreMatch),'service worker static CORE inventory missing');
   let core;
@@ -71,15 +76,41 @@ export async function stageStaticSite(root=process.cwd()){
     if(name.includes('/'))await mkdir(join(out,name.split('/')[0]),{recursive:true});
     await copyFile(source,target);
   }
+  // A deterministic build-bound manifest lets the worker reject complete but
+  // mixed-generation Cloudflare responses. It deliberately hashes original
+  // public CORE files, not private user data or remote APIs.
+  const assets={};
+  for(const name of [...new Set(core.map(x=>x==='./'?'index.html':x.slice(2)))].sort()){
+    const bytes=await readFile(join(out,name));
+    assets[name]=createHash('sha256').update(bytes).digest('hex');
+  }
+  // Source + all precached bytes determine a distinct versioned cache.
+  // This avoids cache collisions when Cloudflare serves a different rollout.
+  const fingerprint=createHash('sha256').update(workerSource)
+    .update(JSON.stringify(assets)).digest('hex').slice(0,16);
+  const cacheDate=buildCache.slice(-10);
+  const stageCache='tms60-release-'+fingerprint+'-'+cacheDate;
+  const sourceWorkerSha256=createHash('sha256').update(workerSource).digest('hex');
+  const integrity=JSON.stringify({schema:1,cache:stageCache,sourceWorkerSha256,assets})+'\n';
+  const commitment=createHash('sha256').update(integrity).digest('hex');
+  const stagedWorker=workerSource
+    .replace("const CACHE='"+buildCache+"';","const CACHE='"+stageCache+"';")
+    .replace(sentinel,"const RELEASE_INTEGRITY_SHA256='"+commitment+"';");
+  await writeFile(join(out,'sw.js'),stagedWorker,'utf8');
+  await writeFile(join(out,'tms60-integrity.json'),integrity,'utf8');
+  // A concrete 404 keeps Pages from pretending that a missing dependency is
+  // a successful SPA navigation. Do not redirect or rewrite user state.
+  await writeFile(join(out,'404.html'),
+    '<!doctype html><html lang="en"><meta charset="utf-8"><title>Not found</title><h1>Not found</h1></html>\n','utf8');
   await writeFile(join(out,'_headers'),HEADERS,'utf8');
   const hashes=[];
-  for(const name of ['_headers',...selected].sort()){
+  for(const name of ['_headers','404.html','tms60-integrity.json',...selected].sort()){
     const value=await readFile(join(out,name));
     const sha=createHash('sha256').update(value).digest('hex');
     hashes.push(sha+'  '+name);
   }
   await writeFile(join(out,'SHA256SUMS'),hashes.join('\n')+'\n','utf8');
-  return {directory:out,files:['_headers','SHA256SUMS',...selected]};
+  return {directory:out,files:['_headers','404.html','tms60-integrity.json','SHA256SUMS',...selected]};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   stageStaticSite().then(x=>console.log('Staged',x.files.length,'public files in dist (NOT DEPLOYED)'))

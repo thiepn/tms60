@@ -32,6 +32,15 @@ test('static stage only includes browser files, not CNAME, SQL, worker or GitHub
     for(const f of ['CNAME','README.md','supabase','worker','.github','tests','scripts'])assert.ok(!stage.files.includes(f));
     assert.ok(stage.files.includes('extra.js'));
     assert.equal(await readFile(join(root,'dist','_headers'),'utf8'),HEADERS);
+    assert.ok(stage.files.includes('tms60-integrity.json'));
+    assert.ok(stage.files.includes('404.html'));
+    const integrity=await readFile(join(root,'dist','tms60-integrity.json'));
+    const sealedWorker=await readFile(join(root,'dist','sw.js'),'utf8');
+    const commitment=sealedWorker.match(/const RELEASE_INTEGRITY_SHA256='([a-f0-9]{64})'/)?.[1];
+    assert.ok(commitment,'staged worker must seal a release');
+    assert.equal(createHash('sha256').update(integrity).digest('hex'),commitment);
+    assert.equal(JSON.parse(integrity).assets['app.html'],
+      createHash('sha256').update(await readFile(join(root,'app.html'))).digest('hex'));
     const hashes=(await readFile(join(root,'dist','SHA256SUMS'),'utf8')).trim().split('\n');
     assert.ok(hashes.length>=REQUIRED.length+1);
     for(const row of hashes){
@@ -44,6 +53,8 @@ test('static stage only includes browser files, not CNAME, SQL, worker or GitHub
     const before=await readdir(join(root,'dist'));
     await stageStaticSite(root);
     assert.deepEqual(await readdir(join(root,'dist')),before);
+    const copy=await readFile(join(root,'dist','tms60-integrity.json'));
+    assert.deepEqual(copy,integrity,'Rebuilding identical source must produce identical release integrity');
   }finally{await rm(root,{recursive:true,force:true})}
 });
 test('rejects app-identity, translation-API and service worker drift',async()=>{
@@ -59,7 +70,38 @@ test('rejects app-identity, translation-API and service worker drift',async()=>{
     await cp(join(ROOT,'niv-service.json'),join(root,'niv-service.json'));
     await rm(join(root,'sw.js'));
     await assert.rejects(stageStaticSite(root),/missing sw.js/);
+    await cp(join(ROOT,'sw.js'),join(root,'sw.js'));
+    await rm(join(root,'enhancements-core.js'));
+    await assert.rejects(stageStaticSite(root),/PWA offline dependency not staged/);
   }finally{await rm(root,{recursive:true,force:true})}
+});
+test('content changes create a different staged worker cache identity without altering source',async()=>{
+  const root=await fixture();
+  try{
+    const first=await stageStaticSite(root);
+    const workerA=await readFile(join(root,'dist','sw.js'),'utf8');
+    const cacheA=workerA.match(/const CACHE='([^']+)'/)?.[1];
+    const contentA=await readFile(join(root,'app.html'),'utf8');
+    await writeFile(join(root,'app.html'),contentA+'\n<!-- REVIEW-ONLY CONTENT CHANGE -->\n');
+    const second=await stageStaticSite(root);
+    const workerB=await readFile(join(root,'dist','sw.js'),'utf8');
+    const cacheB=workerB.match(/const CACHE='([^']+)'/)?.[1];
+    assert.ok(cacheA&&cacheB);
+    assert.notEqual(cacheA,cacheB,'Different bytes must never share an active install cache');
+    assert.notEqual(await readFile(join(root,'dist','tms60-integrity.json'),'utf8'),null);
+    const sourceWorker=await readFile(join(root,'sw.js'),'utf8');
+    assert.match(sourceWorker,/const RELEASE_INTEGRITY_SHA256=null;/,
+      'Staging must never write back to original service-worker source');
+  }finally{await rm(root,{recursive:true,force:true})}
+});
+test('preview inspector refuses canonical origin before any network I/O',async()=>{
+  const {spawnSync}=await import('node:child_process');
+  const run=spawnSync(process.execPath,['scripts/check-cloudflare-preview.mjs'],{
+    cwd:ROOT,encoding:'utf8',timeout:8000,
+    env:{...process.env,TMS60_PREVIEW_URL:'https://tms60.thiepn.dev/'}
+  });
+  assert.notEqual(run.status,0);
+  assert.match(run.stderr,/Only loopback|Never test production|notEqual/);
 });
 test('refuses asset/output symlinks',async()=>{
   const root=await fixture();

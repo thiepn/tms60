@@ -1,5 +1,8 @@
 'use strict';
 const CACHE='tms60-cloudflare-recovery-2026-10-17';
+// Staging replaces this sentinel with the SHA-256 of the exact asset manifest.
+// Main/GitHub Pages has no manifest and continues its existing local-first path.
+const RELEASE_INTEGRITY_SHA256=null;
 const CORE=['./','./index.html','./app.html','./translations.js','./hub-entry.js','./p2-5-source-prep.js','./p2-5-shell-runtime.js','./p2-6-theme-sync.js','./runtime-translation-switch.js','./p2-8-localized-tts-reference.js','./niv-service.json','./enhancements.js','./enhancements-legacy.js','./rc3-hardening.js','./language-switch-hardening.js','./guided-learning-chain.js','./qol-fast-recall.js','./qol-cloze-helpers.js','./qol-word-navigation.js','./ux-patch.js','./ux-patch-core.js','./typo-tolerance.js','./typo-scoring-finalizer.js','./enhancements-core.js','./localization-runtime.js','./localization-completion.js','./favicon.svg','./icon-192.png','./icon-512.png','./vendor/supabase-2.116.0.js','./account-sync.js','./manifest.webmanifest'];
 const STATIC_ASSETS=new Set(['./favicon.svg','./icon-192.png','./icon-512.png'].map(url=>new URL(url,self.location.href).pathname));
 const MANIFEST_PATH=new URL('./manifest.webmanifest',self.location.href).pathname;
@@ -7,6 +10,29 @@ const MANIFEST_PATH=new URL('./manifest.webmanifest',self.location.href).pathnam
 const ROOT_PATH=new URL('./',self.location.href).pathname;
 const PRECACHE_PATHS=new Set(CORE.filter(path=>path!=='./manifest.webmanifest').map(path=>new URL(path,self.location.href).pathname));
 function canonicalShellRequest(url){return new Request(new URL(url.pathname,self.location.origin))}
+const digestHex=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)))
+  .map(value=>value.toString(16).padStart(2,'0')).join('');
+async function loadExpectedRelease(){
+  if(!RELEASE_INTEGRITY_SHA256)return null;
+  if(!/^[a-f0-9]{64}$/.test(RELEASE_INTEGRITY_SHA256))
+    throw new Error('Invalid staged integrity commitment.');
+  const response=await fetch('./tms60-integrity.json',{cache:'reload'});
+  if(!response.ok||response.type==='opaque'||response.redirected)
+    throw new Error('Cannot verify exact staged integrity manifest.');
+  const data=await response.arrayBuffer();
+  if(await digestHex(data)!==RELEASE_INTEGRITY_SHA256)
+    throw new Error('Staged integrity manifest does not match this service worker.');
+  const manifest=JSON.parse(new TextDecoder().decode(data));
+  if(manifest.schema!==1||manifest.cache!==CACHE||!manifest.assets||typeof manifest.assets!=='object')
+    throw new Error('Staged manifest has incorrect version or schema.');
+  const required=new Set(CORE.map(path=>path==='./'?'index.html':path.slice(2)));
+  if(Object.keys(manifest.assets).length!==required.size)
+    throw new Error('Staged manifest asset count differs from installed CORE.');
+  for(const path of required)
+    if(!/^[a-f0-9]{64}$/.test(manifest.assets[path]||''))
+      throw new Error('Required staged asset is missing an integrity digest: '+path);
+  return manifest.assets;
+}
 
 
 function cacheSuccessful(request,response){
@@ -71,11 +97,16 @@ async function previousCachedResponse(request){
   return null;
 }
 
-async function precacheAsset(cache,url){
+async function precacheAsset(cache,url,expected=null){
   const request=new Request(new URL(url,self.location.href));
   try{
     const response=await fetch(url,{cache:'reload'});
-    if(response&&response.ok){
+    if(response&&response.ok&&response.type!=='opaque'&&!response.redirected){
+      if(expected){
+        const name=url==='./'?'index.html':url.slice(2);
+        const hash=await digestHex(await response.clone().arrayBuffer());
+        if(expected[name]!==hash)return {url,source:'integrity-mismatch'};
+      }
       await cache.put(request,response);
       return {url,source:'network'};
     }
@@ -96,14 +127,20 @@ self.addEventListener('install',event=>{
   event.waitUntil((async()=>{
     const older=(await caches.keys()).filter(name=>name!==CACHE&&name.startsWith('tms60-'));
     const isUpdate=older.length>0;
+    // Do not silently accept a mixed Cloudflare edge rollout. The exact
+    // manifest is bound to this worker's staged build and each CORE response.
+    let expected;
+    try{expected=await loadExpectedRelease()}
+    catch(error){await caches.delete(CACHE);throw error}
     const cache=await caches.open(CACHE);
-    const results=await Promise.allSettled(CORE.map(url=>precacheAsset(cache,url)));
+    const results=await Promise.allSettled(CORE.map(url=>precacheAsset(cache,url,expected)));
     const missing=results.filter(x=>x.status==='rejected'||x.value?.source==='missing');
     if(missing.length)console.warn('TMS60 offline bundle incomplete:',missing.length);
-    const unsafeUpdate=isUpdate&&results.some(x=>x.status==='rejected'||x.value?.source!=='network');
+    const unsafeUpdate=(isUpdate||Boolean(expected))&&
+      results.some(x=>x.status==='rejected'||x.value?.source!=='network');
     if(unsafeUpdate){
       await caches.delete(CACHE);
-      throw new Error('Incomplete TMS60 update: previous installed cache preserved.');
+      throw new Error('Incomplete TMS60 update: version inconsistency; previous cache preserved.');
     }
     const shell=(await cache.match(new Request(new URL('./index.html',self.location.href))))
       ||(await cache.match(new Request(new URL('./',self.location.href))));
@@ -151,7 +188,8 @@ self.addEventListener('message',event=>{
         const before=await offlineBundleStatus(cache);
         await Promise.allSettled(before.missing.map(url=>precacheAsset(cache,url)));
       }
-      port.postMessage(await offlineBundleStatus(cache));
+      const status=await offlineBundleStatus(cache);
+      port.postMessage({...status,cache:CACHE,integrityCommitted:Boolean(RELEASE_INTEGRITY_SHA256)});
     }catch(error){port.postMessage({ok:false,error:String(error?.message||error)})}
   })());
 });
