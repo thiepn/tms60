@@ -77,7 +77,8 @@ assert.equal(live.requests,count,'Core fetches cannot pull mixed-version assets'
 assert.match(await (await live.get('manifest.webmanifest?v=new')).text(),/^v2:/);
 assert.match(await (await live.get('non-core-dynamic.json')).text(),/^v2:/);
 assert.match(await (await stored.get(origin+'app.html')).text(),/^v1:/);
-assert.equal((await live.message('TMS60_OFFLINE_STATUS')).ready,true);
+const offlineStatus=await live.message('TMS60_OFFLINE_STATUS');
+assert.equal(offlineStatus.ready,true,'Synthetic cache readiness: '+JSON.stringify(offlineStatus));
 
 for(const status of [0,503]){
   const bad=harness({old:true,fail:'icon-512.png',status});
