@@ -1,0 +1,78 @@
+name: Cloudflare Pages Migration Readiness (NO DEPLOY)
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staged-static-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source and migration regressions
+        run: |
+          node --check scripts/build-cloudflare-pages.mjs
+          node --check tests/cloudflare-pages-migration.test.mjs
+          node --check tests/cloudflare-pages-local-smoke.mjs
+          node --check tests/cloudflare-pages-sw-recovery.test.mjs
+          node --check tests/cloudflare-pages-integrity.test.mjs
+          node --check tests/cloudflare-pages-browser-transition.mjs
+          node --check scripts/check-cloudflare-preview.mjs
+          node --check scripts/serve-cloudflare-pages-local.mjs
+          node --check tests/cloudflare-pages-cutover-authority.test.mjs
+          node --check tests/cloudflare-pages-preview-negative.test.mjs
+          node --test tests/cloudflare-pages-migration.test.mjs
+          node --test tests/cloudflare-pages-sw-recovery.test.mjs
+          node tests/pwa-install-metadata-regression.mjs
+          node tests/supabase-account-sync-regression.mjs
+          node --test tests/supabase-account-sync-runtime.test.mjs
+      - name: Build public-only static artifact
+        run: |
+          node scripts/build-cloudflare-pages.mjs
+          test ! -e dist/CNAME
+          test ! -e dist/worker
+          test ! -e dist/supabase
+          test ! -e dist/.github
+          test -f dist/app.html
+          test -f dist/sw.js
+          test -f dist/manifest.webmanifest
+          (cd dist && sha256sum -c SHA256SUMS)
+          test -f dist/_headers
+          test -f dist/SHA256SUMS
+          test -f dist/tms60-integrity.json
+          test -f dist/404.html
+          node --test tests/cloudflare-pages-integrity.test.mjs
+          node --test tests/cloudflare-pages-cutover-authority.test.mjs
+          node --test tests/cloudflare-pages-preview-negative.test.mjs
+      - name: Locally test staged desktop and mobile Chromium
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+          nohup node scripts/serve-cloudflare-pages-local.mjs >/tmp/tms60-cf-review.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:4173/ >/dev/null
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4173/app.html)" = "308"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4173/app)" = "200"
+          TMS60_PREVIEW_URL=http://127.0.0.1:4173/ node scripts/check-cloudflare-preview.mjs
+          node tests/cloudflare-pages-local-smoke.mjs
+          TMS60_TEST_URL=http://127.0.0.1:4173/ node tests/p2-3-service-worker-strategy.mjs
+          TMS60_TEST_URL=http://127.0.0.1:4173/ node tests/p2-4-resilient-precache.mjs
+          node tests/cloudflare-pages-browser-transition.mjs
+      - name: Upload non-deployed reviewer artifact only
+        uses: actions/upload-artifact@v4
+        with:
+          name: tms60-cloudflare-static-review
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7

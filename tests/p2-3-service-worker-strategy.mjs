@@ -1,6 +1,6 @@
 import {chromium} from 'playwright';
 
-const APP='https://thiepn.github.io/tms60/';
+const APP=process.env.TMS60_TEST_URL||'https://thiepn.github.io/tms60/';
 let failures=0;
 const check=(condition,name,detail='')=>{
   console.log(`${condition?'PASS':'FAIL'} ${name}${detail?' — '+detail:''}`);
@@ -73,7 +73,9 @@ try{
   check(source.includes('STATIC_ASSETS.has(url.pathname)'),'Static assets have an explicit strategy');
   check(source.includes('url.pathname===MANIFEST_PATH')&&source.includes('event.respondWith(networkFirst(req,event))'),'Manifest is network-first so install metadata cannot remain stale');
   check(source.includes('event.respondWith(networkFirst(req,event))'),'Other same-origin GETs use normal-cache network-first');
-  check(source.includes("fetch(url,{cache:'reload'})"),'Install-time freshness remains explicit');
+  check(source.includes("fetch(url,{cache:'reload'})")||
+    source.includes("fetch(expected?releaseNetworkURL(url):url,{cache:'reload'})"),
+    'Install-time freshness remains explicit, with staged Pages clean-route resolution');
 
   await page.goto(APP,{waitUntil:'domcontentloaded',timeout:25000});
   await frameOf(page);

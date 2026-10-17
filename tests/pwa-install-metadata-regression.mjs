@@ -15,12 +15,14 @@ check(/<link\b[^>]*rel=["']manifest["'][^>]*href=["']\/manifest\.webmanifest(?:\
   'Manifest is linked statically from the dedicated-origin root');
 check(/<meta\b[^>]*name=["']mobile-web-app-capable["'][^>]*content=["']yes["'][^>]*>/i.test(index),
   'Android web-app capability metadata is static');
-check(/<link\b[^>]*rel=["']apple-touch-icon["'][^>]*href=["']\/icon-192\.png["'][^>]*>/i.test(index),
+check(/<link\b[^>]*rel=["']apple-touch-icon["'][^>]*href=["']\/icon-192\.png(?:\?[^"']*)?["'][^>]*>/i.test(index),
   'Touch icon is rooted on the dedicated TMS60 origin');
 check(/navigator\.serviceWorker\.register\(['"]\/sw\.js['"],\{scope:['"]\/['"],updateViaCache:['"]none['"]\}\)/.test(index),
   'Top-level shell registers the root service worker immediately with cache bypass');
 
 check(manifest.display==='standalone','Manifest requests standalone display',manifest.display);
+check(manifest.icons.every(icon=>/\?v=20261017-iconfix-1$/.test(icon.src)),
+  'Install icon URLs are versioned to bypass stale corrupted PNG caches');
 check(manifest.id==='/','Manifest has a stable dedicated-origin app identity',manifest.id);
 check(manifest.start_url==='/','Manifest starts at the dedicated-origin root',manifest.start_url);
 check(manifest.scope==='/','Manifest owns the dedicated-origin root scope',manifest.scope);
