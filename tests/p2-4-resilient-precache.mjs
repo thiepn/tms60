@@ -1,7 +1,7 @@
 import vm from 'node:vm';
 import {chromium} from 'playwright';
 
-const APP='https://thiepn.github.io/tms60/';
+const APP=process.env.TMS60_TEST_URL||'https://thiepn.github.io/tms60/';
 let failures=0;
 const check=(condition,name,detail='')=>{
   console.log(`${condition?'PASS':'FAIL'} ${name}${detail?' — '+detail:''}`);
@@ -104,7 +104,12 @@ function makeServiceWorkerHarness(source,currentCache,{failedPath,oldFallback=fa
     async skipWaiting(){skipWaitingCalled=true},
     clients:{async claim(){}}
   };
-  vm.runInNewContext(source,{
+  // The historical P2-4 harness tests source-only update resilience.
+  // Stage manifest/WebCrypto checks run separately against the actual dist SW
+  // in cloudflare-pages-integrity.test.mjs. Do not treat them as this mock.
+  const legacySource=source.replace(/const RELEASE_INTEGRITY_SHA256='[a-f0-9]{64}';/,
+    'const RELEASE_INTEGRITY_SHA256=null;');
+  vm.runInNewContext(legacySource,{
     self:selfMock,
     location:selfMock.location,
     caches:cachesMock,
@@ -148,7 +153,9 @@ try{
   check(source.includes('Promise.allSettled(CORE.map'),'Install uses all-settled precaching');
   check(source.includes('previousCachedResponse'),'Previous-cache fallback is explicit');
   check(source.includes('precacheAsset'),'Per-asset precache isolation is explicit');
-  check(!source.includes('Promise.all(CORE.map'),'All-or-nothing CORE Promise.all removed');
+  const installSource=source.slice(source.indexOf("self.addEventListener('install'"),source.indexOf("self.addEventListener('activate'"));
+  check(!installSource.includes('Promise.all(CORE.map'),
+    'Install avoids all-or-nothing CORE Promise.all; status enumeration is permitted');
   check(!source.includes('Failed to precache'),'Single asset failure no longer throws the old fatal precache error');
 
   const freshHarness=makeServiceWorkerHarness(source,expectedCache,{failedPath:'./app.html'});
@@ -163,13 +170,17 @@ try{
   const updateHarness=makeServiceWorkerHarness(source,expectedCache,{failedPath:'./icon-512.png',oldFallback:true,httpFailure:true});
   let updateInstallError='';
   try{await updateHarness.install()}catch(error){updateInstallError=String(error?.stack||error)}
-  const updateStore=updateHarness.stores.get(expectedCache)||new Map();
-  const fallbackResponse=updateStore.get(updateHarness.normalize('./icon-512.png'));
-  const fallbackText=fallbackResponse?await fallbackResponse.clone().text():'';
-  check(!updateInstallError,'Update install survives one HTTP precache failure',updateInstallError);
-  check(updateHarness.skipWaitingCalled,'Update resilient install still reaches skipWaiting');
-  check(fallbackText==='old-cache:./icon-512.png','Failed update asset is copied from previous TMS cache',fallbackText);
-  check(updateStore.has(updateHarness.normalize('./index.html'))&&updateStore.has(updateHarness.normalize('./app.html')),'Successful update assets still refresh normally',String(updateStore.size));
+  check(/Incomplete TMS60 update/.test(updateInstallError),
+    'Partial update aborts instead of replacing a complete installed version',updateInstallError);
+  check(!updateHarness.skipWaitingCalled,
+    'Rejected update never force-activates over a live study session');
+  check(!updateHarness.stores.has(expectedCache),
+    'Partial/mixed candidate cache is deleted after rejected update');
+  const prior=updateHarness.stores.get('tms60-previous-test-cache');
+  check(Boolean(prior)&&prior.has(updateHarness.normalize('./icon-512.png')),
+    'Prior working cache remains available for rollback');
+  check(Boolean(prior)&&!updateHarness.stores.has(expectedCache),
+    'Original bundle owns recovery; old/new assets are not mixed');
 
   await page.goto(APP,{waitUntil:'domcontentloaded',timeout:25000});
   await frameOf(page);

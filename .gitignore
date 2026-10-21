@@ -1,0 +1,7 @@
+# Local Cloudflare Pages public-only staging output
+dist/
+
+# Non-deployed static staging scratch/lock; never commit candidate or old build
+.tms60-cloudflare-stage.lock/
+.tms60-cloudflare-candidate-*/
+.tms60-cloudflare-previous-*/
