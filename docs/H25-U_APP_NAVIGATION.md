@@ -1,0 +1,3 @@
+# H25-U — TMS60 reference integration
+
+Vendored public navigation v1 from Hub PR #215, commit 7eb78b91276dc8dd91ddd6d3f58d97ffd47d2f9e. The switcher mounts in the existing study iframe header, with local modules and stylesheet precached by the existing service worker. Navigation opens a separate tab without modifying the study iframe, progress or session state. Existing translation-qualified entry and account contracts are unchanged. No private records, token, or arbitrary destination is transmitted. Physical-device installed PWA and active-session preservation still require observed acceptance. No merge or deployment authorized.
