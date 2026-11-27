@@ -45,6 +45,26 @@ try{
   await page.reload({waitUntil:'domcontentloaded',timeout:30000});
 
   const frame=await frameOf(page);
+  // H25-U: exercise the real mobile srcdoc switcher before the unchanged OAuth test.
+  const switcherTrigger=frame.getByRole('button',{name:'Switch THIEPN app'});
+  const switcher=frame.getByRole('dialog',{name:'THIEPN app switcher'});
+  const previousView=await frame.evaluate(()=>document.documentElement.dataset.view);
+  await switcherTrigger.click();
+  await switcher.waitFor({state:'visible'});
+  check(await switcher.getByRole('navigation',{name:'THIEPN apps',exact:true}).locator('a, [aria-current="page"]').count()===15,'Switcher exposes Hub plus all 14 approved apps');
+  check(await switcher.getByRole('navigation',{name:'App actions',exact:true}).getByRole('link').count()===4,'Switcher exposes approved owner actions');
+  const target='https://thiepn.dev/notes/';
+  await context.route(target,route=>route.fulfill({contentType:'text/html',body:'<title>Notes navigation fixture</title>'}));
+  const notesLink=switcher.getByRole('link',{name:'Notes',exact:true});
+  check(await notesLink.getAttribute('target')==='_blank'&&await notesLink.getAttribute('rel')==='noopener noreferrer','Switcher link isolates opener and referrer');
+  const [opened]=await Promise.all([context.waitForEvent('page'),notesLink.click()]);
+  await opened.waitForLoadState('domcontentloaded');
+  check(opened.url()===target&&await opened.evaluate(()=>window.opener===null),'Owner app opens separately without opener');
+  await opened.close();
+  await context.unroute(target);
+  await switcher.waitFor({state:'hidden'});
+  check(await frame.evaluate(()=>document.documentElement.dataset.view)===previousView,'Returning preserves existing TMS60 view');
+  check(await switcherTrigger.evaluate(button=>button===button.ownerDocument.activeElement),'Switcher restores focus');
   await nav(frame,'settings');
   await frame.waitForSelector('[data-account-action="google-sign-in"]',{timeout:10000});
 
